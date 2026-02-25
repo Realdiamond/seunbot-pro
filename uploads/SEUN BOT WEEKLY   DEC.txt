@@ -1,0 +1,533 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import talib
+from scipy.signal import argrelextrema
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import time
+import os
+import warnings
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+import requests
+import json
+from datetime import datetime, timedelta
+import astropy.coordinates as coord
+import astropy.time as atime
+import astropy.units as u
+from astropy.coordinates import get_body
+from bs4 import BeautifulSoup as bs
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import random
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+warnings.filterwarnings('ignore')
+
+# ================= GLOBAL CONFIGURATION =================
+RISK_FREE_RATE = 0.02
+MAX_WORKERS = os.cpu_count() // 2
+MIN_MARKET_CAP = 50e6
+MIN_PRICE = 5.0
+PATTERN_SENSITIVITY = 0.05
+FIBONACCI_TOLERANCE = 0.05
+CHANNEL_CONFIRMATION_BARS = 3
+PATTERN_LOOKBACK = 20
+ZIGZAG_LENGTH = 5
+ZIGZAG_DEPTH = 10
+ZIGZAG_NUM_PIVOTS = 10
+CYCLE_MIN_DURATION = 30
+
+# Pattern detection parameters
+PATTERN_ANGLE_THRESHOLD = 1.5
+PATTERN_EXPANSION_RATIO = 1.2
+PATTERN_CONTRACTION_RATIO = 0.8
+MIN_TRENDLINE_R2 = 0.75
+CONFIRMATION_VOL_RATIO = 1.2
+MIN_TRENDLINE_ANGLE = 0.5
+MAX_TRENDLINE_ANGLE = 85
+HARMONIC_ERROR_TOLERANCE = 0.05
+PRZ_LEFT_RANGE = 20
+PRZ_RIGHT_RANGE = 20
+FIBONACCI_LINE_LENGTH = 30
+
+# Weights for signal generation
+FUNDAMENTAL_WEIGHT = 0.3
+SENTIMENT_WEIGHT = 0.2
+TECHNICAL_WEIGHT = 0.4
+GANN_WEIGHT = 0.1
+MONTHLY_WEIGHT = 0.05
+WEEKLY_WEIGHT = 0.5
+DAILY_WEIGHT = 0.2
+H4_WEIGHT = 0.25  # New H4 weight
+
+# Gann aspects tolerance
+ASPECT_TOLERANCE = 5.0
+ASPECT_ANGLES = [0, 60, 90, 120, 180]
+
+# Optimization for higher accuracy and lower DD
+STRONG_SIGNAL_THRESHOLD = 4.0  # Increased from 3.0 for stronger signals
+SIGNAL_THRESHOLD = 3.0  # Increased from 2.0
+POSITION_SIZE_STRONG = 0.03  # Reduced from 0.05 for lower DD
+POSITION_SIZE_NORMAL = 0.02  # Reduced from 0.03
+STOP_LOSS_PCT = 0.05  # 5% stop loss for tighter risk control (from 8%)
+TARGET1_PCT = 0.15  # 15% first target for RR 3:1
+TARGET2_PCT = 0.30  # 30% second target for RR 6:1
+
+# High RR for weekly/monthly
+WEEKLY_TARGET1_PCT = 0.25  # RR 5:1
+WEEKLY_TARGET2_PCT = 0.50  # RR 10:1
+MONTHLY_TARGET1_PCT = 0.50  # RR 10:1
+MONTHLY_TARGET2_PCT = 1.00  # RR 20:1
+
+# User agents for rotation
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:89.0) Gecko/20100101 Firefox/89.0'
+]
+
+# Proxy list (add your proxies here, format 'http://ip:port' or with auth 'http://user:pass@ip:port')
+PROXIES = [
+    # 'http://proxy1:port',
+    # 'http://proxy2:port',
+    # Add more proxies as needed. For testing, leave empty or use free proxies cautiously.
+]
+
+# Nigerian stock mapping for investing.com
+NGX_MAPPING = {
+    'DANGCEM.NG': 'dangote-cement',
+    'MTNN.NG': 'mtn-nigeria-communications-plc',
+    'BUACEMENT.NG': 'bua-cement',
+    'GUARANTY.NG': 'guaranty-trust-bank',
+    'ZENITHBANK.NG': 'zenith-bank',
+    'STANBIC.NG': 'stanbic-ibtc-holdings-plc',
+    'SEPLAT.NG': 'seplat-petroleum-development-company-plc',
+    'AIRTELAFRI.NG': 'airtel-africa-plc',
+    'BUAFOODS.NG': 'bua-foods-plc',
+    'NESTLE.NG': 'nestle-nigeria'
+}
+
+# ================= ROBUST REQUEST FUNCTION =================
+def robust_request(url, headers=None, params=None, retries=5, backoff_factor=0.3, timeout=10):
+    """Robust request with retries, user agent rotation, proxy rotation, and error handling"""
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=(500, 502, 504, 429),
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    
+    if headers is None:
+        headers = {}
+    headers['User-Agent'] = random.choice(USER_AGENTS)
+    
+    # Proxy rotation
+    if PROXIES:
+        proxy = random.choice(PROXIES)
+        session.proxies = {'http': proxy, 'https': proxy}
+    else:
+        session.proxies = {}  # No proxy if list empty
+    
+    try:
+        response = session.get(url, headers=headers, params=params, timeout=timeout)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.ProxyError as errp:
+        print(f"Proxy Error for {url}: {errp}")
+    except requests.exceptions.HTTPError as errh:
+        print(f"HTTP Error for {url}: {errh}")
+    except requests.exceptions.ConnectionError as errc:
+        print(f"Error Connecting for {url}: {errc}")
+    except requests.exceptions.Timeout as errt:
+        print(f"Timeout Error for {url}: {errt}")
+    except requests.exceptions.RequestException as err:
+        print(f"Request Exception for {url}: {err}")
+    return None
+
+# ================= SELENIUM SCRAPING FUNCTION =================
+def get_page_with_selenium(url, wait_for_element=None, timeout=30):
+    """Use Selenium for scraping when static request fails (handles JS)"""
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument(f'user-agent={random.choice(USER_AGENTS)}')
+    
+    driver = webdriver.Chrome(options=options)
+    try:
+        driver.get(url)
+        if wait_for_element:
+            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.ID, wait_for_element)))
+        html = driver.page_source
+        return html
+    except Exception as e:
+        print(f"Selenium error for {url}: {e}")
+        return None
+    finally:
+        driver.quit()
+
+# ================= DATA FUNCTIONS =================
+def get_filtered_pairs():
+    """Get list of 50 top crypto pairs from Binance, 50 FX pairs, and Nigerian stocks"""
+    # Get top 50 cryptos from Binance by 24hr quote volume
+    url = "https://api.binance.com/api/v3/ticker/24hr"
+    response = robust_request(url)
+    if response is None or response.status_code != 200:
+        print("Error fetching Binance data, using fallback")
+        cryptos = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']  # Fallback
+    else:
+        data = json.loads(response.text)
+        usdt_pairs = [item for item in data if item['symbol'].endswith('USDT') and 'UPUSDT' not in item['symbol'] and 'DOWNUSDT' not in item['symbol']]
+        usdt_pairs.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
+        cryptos = [item['symbol'] for item in usdt_pairs[:50]]
+
+    # Top 50 FX pairs (hardcoded common majors, crosses, and exotics using yfinance tickers)
+    fx_pairs = [
+        'EURUSD=X', 'USDJPY=X', 'GBPUSD=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X', 'NZDUSD=X',
+        'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'AUDJPY=X', 'EURCAD=X', 'EURAUD=X', 'EURCHF=X',
+        'GBPAUD=X', 'GBPCAD=X', 'GBPCHF=X', 'CADJPY=X', 'CHFJPY=X', 'AUDCAD=X', 'AUDCHF=X',
+        'NZDJPY=X', 'NZDCAD=X', 'NZDCHF=X', 'CADCHF=X', 'USDMXN=X', 'USDZAR=X', 'USDTRY=X',
+        'USDSGD=X', 'USDHKD=X', 'USDNOK=X', 'USDSEK=X', 'USDDKK=X', 'USDPLN=X', 'USDCZK=X',
+        'USDHUF=X', 'USDRUB=X', 'USDINR=X', 'USDBRL=X', 'USDKRW=X', 'USDCNY=X', 'USDTHB=X',
+        'USDMYR=X', 'USDPHP=X', 'USDIDR=X', 'USDSAR=X', 'USDAED=X', 'USDKWD=X', 'USDBHD=X'
+    ]
+
+    # Updated Nigerian stocks (equities and ETFs) - approximately 150 equities + 14 ETFs
+    nigerian_stocks = [
+        'AIRTELAFRI.NG', 'BUAFOODS.NG', 'MTNN.NG', 'DANGCEM.NG', 'BUACEMENT.NG', 'SEPLAT.NG', 'ARADEL.NG', 'GEREGU.NG', 'GTCO.NG', 'ZENITHBANK.NG', 
+        'NB.NG', 'TRANSPOWER.NG', 'WAPCO.NG', 'INTBREW.NG', 'STANBIC.NG', 'UBA.NG', 'TRANSCOHOT.NG', 'PRESCO.NG', 'NESTLE.NG', 'FIRSTHOLDCO.NG', 
+        'ACCESSCORP.NG', 'OKOMUOIL.NG', 'FIDELITYBK.NG', 'ETI.NG', 'WEMABANK.NG', 'DANGSUGAR.NG', 'OANDO.NG', 'GUINNESS.NG', 'FCMB.NG', 
+        'TRANSCORP.NG', 'UNILEVER.NG', 'STERLINGNG.NG', 'UCAP.NG', 'NASCON.NG', 'UACN.NG', 'JBERGER.NG', 'BETAGLAS.NG', 'CUSTODIAN.NG', 'TOTAL.NG', 
+        'JAIZBANK.NG', 'NAHCO.NG', 'PZ.NG', 'HONYFLOUR.NG', 'MECURE.NG', 'NGXGROUP.NG', 'CADBURY.NG', 'NEM.NG', 'CONOIL.NG', 'CHAMPION.NG', 
+        'AIICO.NG', 'MANSARD.NG', 'SKYAVN.NG', 'ETRANZACT.NG', 'VITAFOAM.NG', 'CORNERST.NG', 'UPDC.NG', 'FIDSON.NG', 'VFDGROUP.NG', 'WAPIC.NG', 
+        'IKEJAHOTEL.NG', 'MBENEFIT.NG', 'ABCTRANS.NG', 'ABBASBANK.NG', 'ABCTRANS.NG', 'ACADEMYPRESS.NG', 'ACCESSBANK.NG', 'AFRINSURE.NG', 
+        'AFRIPRUD.NG', 'AFROMEDIA.NG', 'AGLEVENT.NG', 'AIICO.NG', 'AIRTELAFRI.NG', 'ALEX.NG', 'ARBICO.NG', 'ARDOVA.NG', 'ASOSAVINGS.NG', 
+        'AUSTINLAZ.NG', 'BERGER.NG', 'BETAGLAS.NG', 'BUACEMENT.NG', 'BUAFOODS.NG', 'CADBURY.NG', 'CAP.NG', 'CAVERTON.NG', 'CHAMPION.NG', 
+        'CHAMS.NG', 'CHEVRON.NG', 'CHIPLC.NG', 'CILEASING.NG', 'CONOIL.NG', 'CONHALLPLC.NG', 'CORNERST.NG', 'COURTVILLE.NG', 'CUSTODIAN.NG', 
+        'CUTIX.NG', 'CWG.NG', 'DAARCOMM.NG', 'DANGCEM.NG', 'DANGSUGAR.NG', 'DEAPCAP.NG', 'DUNLOP.NG', 'EKOCORP.NG', 'ELLALAKES.NG', 
+        'ENAMELWA.NG', 'ETERNA.NG', 'ETI.NG', 'ETRANZACT.NG', 'EUNISELL.NG', 'FBNH.NG', 'FCMB.NG', 'FIDELITYBK.NG', 'FIDSON.NG', 'FLOURMILL.NG', 
+        'FTNCOCOA.NG', 'GEREGU.NG', 'GLAXOSMITH.NG', 'GOLDBREW.NG', 'GREENWICH.NG', 'GTCO.NG', 'GUINEAINS.NG', 'GUINNESS.NG', 'HALLMARK.NG', 
+        'HONYFLOUR.NG', 'IKEJAHOTEL.NG', 'IMG.NG', 'INFINITY.NG', 'INTBREW.NG', 'INTENEGINS.NG', 'JAIZBANK.NG', 'JAPAULGOLD.NG', 'JBERGER.NG', 
+        'JOHNHOLT.NG', 'JULI.NG', 'LASACO.NG', 'LEARNAFRCA.NG', 'LINKASSURE.NG', 'LIVESTOCK.NG', 'LOTUSCAP.NG', 'MAYBAKER.NG', 'MBENEFIT.NG', 
+        'MCNICHOLS.NG', 'MECURE.NG', 'MEYER.NG', 'MORISON.NG', 'MRS.NG', 'MTNN.NG', 'MULTIVERSE.NG', 'NASCON.NG', 'NB.NG', 'NCR.NG', 
+        'NEIMETH.NG', 'NEM.NG', 'NESTLE.NG', 'NEWGOLD.NG', 'NGXGROUP.NG', 'NNFM.NG', 'NOTORE.NG', 'NPFMCRFBK.NG', 'NSLTECH.NG', 'OANDO.NG', 
+        'OKOMUOIL.NG', 'OMATEK.NG', 'OMATEK.NG', 'PHARMDEKO.NG', 'PRESCO.NG', 'PRESTIGE.NG', 'PZ.NG', 'RACO.NG', 'REDSTAREX.NG', 
+        'REGALINS.NG', 'RONCHESS.NG', 'ROYALEX.NG', 'RTBRISCOE.NG', 'SCOA.NG', 'SEPLAT.NG', 'SKYAVN.NG', 'SOVRENINS.NG', 'STANBIC.NG', 
+        'STERLING.NG', 'SUNUASSUR.NG', 'TANTALIZER.NG', 'THOMASWY.NG', 'TIP.NG', 'TOTAL.NG', 'TRANSCOHOT.NG', 'TRANSCORP.NG', 'TRANSPOWER.NG', 
+        'TRIPPLEG.NG', 'UACN.NG', 'UBA.NG', 'UCAP.NG', 'UCAP.NG', 'UHOMREIT.NG', 'UNILEVER.NG', 'UNITYBNK.NG', 'UNIVINSURE.NG', 'UPL.NG', 
+        'UPDC.NG', 'UPDCREIT.NG', 'VANLEER.NG', 'VERITASKAP.NG', 'VETBANK.NG', 'VETGOODS.NG', 'VETGRIF30.NG', 'VETINDETF.NG', 'VFDGROUP.NG', 
+        'VITAFOAM.NG', 'WAPCO.NG', 'WAPIC.NG', 'WEMABANK.NG', 'ZENITHBANK.NG', 'NEWGOLD.NG', 'SIAMLETF40.NG', 'STANBICETF30.NG', 'MERVALUE.NG', 
+        'VETINDETF.NG', 'VSPBONDETF.NG', 'VETGOODS.NG', 'GREENWETF.NG', 'VETBANK.NG', 'LOTUSHAL15.NG', 'VETGRIF30.NG', 'MERGROWTH.NG'
+    ]
+
+    return cryptos + fx_pairs + nigerian_stocks
+
+def get_binance_historical(symbol, interval, days):
+    """Fetch historical OHLCV from Binance API with robustness"""
+    url = "https://api.binance.com/api/v3/klines"
+    limit = 1000
+    end_time = int(time.time() * 1000)
+    start_time = int((datetime.now() - timedelta(days=days)).timestamp() * 1000)
+    data = []
+    while start_time < end_time:
+        params = {
+            'symbol': symbol,
+            'interval': interval,
+            'startTime': start_time,
+            'endTime': end_time,
+            'limit': limit
+        }
+        response = robust_request(url, params=params)
+        if response is None:
+            return pd.DataFrame()
+        new_data = json.loads(response.text)
+        if not new_data:
+            break
+        data += new_data
+        start_time = new_data[-1][0] + 1
+    if not data:
+        return pd.DataFrame()
+    df = pd.DataFrame(data, columns=['Open time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close time', 'Quote asset volume', 'Number of trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
+    df['Open time'] = pd.to_datetime(df['Open time'] / 1000, unit='s')
+    df.set_index('Open time', inplace=True)
+    df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+    df = df.astype(float)
+    return df
+
+def get_historical_from_investing(symbol, start_date, end_date):
+    """Sophisticated webscraping from investing.com for historical data (FX, stocks, NGX) with fallback parsing"""
+    if '.NG' in symbol:
+        pair_formatted = NGX_MAPPING.get(symbol, symbol.replace('.NG', '').lower()) + '-historical-data'
+        base_url = "https://ng.investing.com/equities/"
+    elif '=X' in symbol:
+        pair_formatted = symbol.replace('=X', '').lower().replace('/', '-') + '-historical-data'
+        base_url = "https://www.investing.com/currencies/"
+    else:
+        pair_formatted = symbol.lower() + '-historical-data'
+        base_url = "https://www.investing.com/equities/"
+    
+    url = base_url + pair_formatted
+    
+    response = robust_request(url)
+    if response is None:
+        # Fallback to Selenium if request fails
+        html = get_page_with_selenium(url, wait_for_element='curr_table')
+        if html is None:
+            return pd.DataFrame()
+        soup = bs(html, 'html.parser')
+    else:
+        soup = bs(response.text, 'html.parser')
+    
+    table = soup.find('table', {'id': 'curr_table'})
+    if not table:
+        # Fallback: Try different ID or class
+        table = soup.find('table', class_='historicalTbl')
+        if not table:
+            print(f"No table found for {symbol} on investing.com")
+            return pd.DataFrame()
+    
+    rows = table.find('tbody').find_all('tr')
+    data = []
+    for row in rows:
+        cols = row.find_all('td')
+        if len(cols) >= 6:
+            try:
+                date_str = cols[0]['data-real-value']  # Unix timestamp
+                date = datetime.fromtimestamp(int(date_str)).strftime('%Y-%m-%d')
+                price = float(cols[1].text.replace(',', ''))
+                open_ = float(cols[2].text.replace(',', ''))
+                high = float(cols[3].text.replace(',', ''))
+                low = float(cols[4].text.replace(',', ''))
+                vol = cols[5].text
+                data.append([date, open_, high, low, price, vol])
+            except ValueError:
+                continue
+    
+    if not data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(data, columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+    df['Date'] = pd.to_datetime(df['Date'])
+    df.set_index('Date', inplace=True)
+    df.sort_index(inplace=True)
+    
+    # Filter by date range
+    df = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]
+    
+    return df
+
+def get_ngx_daily_from_ngxgroup():
+    """Scrape daily price list from NGX Group"""
+    url = "https://ngxgroup.com/exchange/trade/market-data/daily-price-list/"
+    response = robust_request(url)
+    if response is None:
+        # Fallback to Selenium
+        html = get_page_with_selenium(url)
+        if html is None:
+            return pd.DataFrame()
+        soup = bs(html, 'html.parser')
+    else:
+        soup = bs(response.text, 'html.parser')
+    
+    # Find link to latest PDF or table
+    pdf_link = soup.find('a', href=lambda href: href and '.pdf' in href)
+    if pdf_link:
+        # Download PDF and extract, but since no PDF tool, fallback
+        print("PDF download needed, fallback")
+        return pd.DataFrame()
+    table = soup.find('table')
+    if table:
+        data = pd.read_html(str(table))[0]
+        data['Date'] = datetime.now().strftime('%Y-%m-%d')
+        data.set_index('Date', inplace=True)
+        return data
+    return pd.DataFrame()
+
+def get_historical_from_tradingview(symbol, interval, start_date, end_date):
+    """Placeholder for TradingView scrape/API, but TradingView requires API key or selenium for robustness"""
+    # For now, fallback to yf
+    return pd.DataFrame()
+
+# ================= TECHNICAL INDICATORS =================
+def calculate_ha_indicators(df):
+    """Calculate technical indicators on Heikin-Ashi data including MACD"""
+    df['ATR'] = talib.ATR(df['HA_High'], df['HA_Low'], df['HA_Close'], timeperiod=14)
+    df['RSI'] = talib.RSI(df['HA_Close'], timeperiod=14)
+    df['ADX'] = talib.ADX(df['HA_High'], df['HA_Low'], df['HA_Close'], timeperiod=14)
+    df['MACD'], df['MACD_Signal'], df['MACD_Hist'] = talib.MACD(df['HA_Close'], fastperiod=12, slowperiod=26, signalperiod=9)
+    df['Cycle_Phase'] = 'Bull' if df['HA_Close'].iloc[-1] > df['HA_Close'].iloc[-10] else 'Bear'
+    df['Cycle_Duration'] = len(df[df['Cycle_Phase'] == df['Cycle_Phase'].iloc[-1]])
+    df['Cycle_Momentum'] = (df['HA_Close'].iloc[-1] - df['HA_Close'].iloc[-10]) / df['HA_Close'].iloc[-10]
+    return df
+
+def detect_divergence(df, pivots, indicator='MACD'):
+    """Detect MACD or volume divergence"""
+    divergence = {'bullish': False, 'bearish': False}
+    
+    if len(pivots) < 2:
+        return divergence
+    
+    recent_highs = [p for p in pivots[-4:] if p[2] == 'high']
+    recent_lows = [p for p in pivots[-4:] if p[2] == 'low']
+    
+    if indicator == 'MACD':
+        values = df['MACD'].values
+    else:  # Volume
+        values = df['Volume'].values
+    
+    # Bearish divergence: Price HH, indicator LH
+    if len(recent_highs) >= 2:
+        p1_idx, p1_price, _ = recent_highs[-2]
+        p2_idx, p2_price, _ = recent_highs[-1]
+        if p2_price > p1_price and values[p2_idx] < values[p1_idx]:
+            divergence['bearish'] = True
+    
+    # Bullish divergence: Price LL, indicator HL
+    if len(recent_lows) >= 2:
+        p1_idx, p1_price, _ = recent_lows[-2]
+        p2_idx, p2_price, _ = recent_lows[-1]
+        if p2_price < p1_price and values[p2_idx] > values[p1_idx]:
+            divergence['bullish'] = True
+    
+    return divergence
+
+def detect_confluence(df, pivots):
+    """Detect Smart Money Concepts confluence with divergences"""
+    confluence = {'bullish_confluence': False, 'bearish_confluence': False, 'factors': []}
+    
+    # Order Blocks
+    high_ob = df['HA_High'].rolling(window=5).max().shift(1)
+    low_ob = df['HA_Low'].rolling(window=5).min().shift(1)
+    if df['HA_Close'].iloc[-1] > high_ob.iloc[-1]: 
+        confluence['factors'].append('Bullish OB')
+    elif df['HA_Close'].iloc[-1] < low_ob.iloc[-1]: 
+        confluence['factors'].append('Bearish OB')
+    
+    # Fair Value Gaps
+    fvg_high = df['HA_High'].rolling(window=3).max().shift(2)
+    fvg_low = df['HA_Low'].rolling(window=3).min().shift(2)
+    if df['HA_Close'].iloc[-1] > fvg_high.iloc[-1] and df['HA_Close'].iloc[-2] < fvg_high.iloc[-1]: 
+        confluence['factors'].append('Bullish FVG')
+    elif df['HA_Close'].iloc[-1] < fvg_low.iloc[-1] and df['HA_Close'].iloc[-2] > fvg_low.iloc[-1]: 
+        confluence['factors'].append('Bearish FVG')
+    
+    # Market Structure
+    trend = 'Uptrend' if df['HA_Close'].iloc[-1] > df['HA_Close'].iloc[-10] else 'Downtrend'
+    confluence['factors'].append(trend)
+    
+    # Add divergences
+    macd_div = detect_divergence(df, pivots, 'MACD')
+    vol_div = detect_divergence(df, pivots, 'Volume')
+    
+    if macd_div['bullish']:
+        confluence['factors'].append('Bullish MACD Divergence')
+    elif macd_div['bearish']:
+        confluence['factors'].append('Bearish MACD Divergence')
+    
+    if vol_div['bullish']:
+        confluence['factors'].append('Bullish Volume Divergence')
+    elif vol_div['bearish']:
+        confluence['factors'].append('Bearish Volume Divergence')
+    
+    confluence['bullish_confluence'] = any('Bullish' in f for f in confluence['factors'])
+    confluence['bearish_confluence'] = any('Bearish' in f for f in confluence['factors'])
+    return confluence
+
+# ================= STOCK ANALYSIS =================
+def analyze_stock(symbol):
+    try:
+        is_crypto = 'USDT' in symbol.upper()
+        is_fx = '=X' in symbol.upper()
+        is_ngx = '.NG' in symbol.upper()
+        
+        # Download data with robust scraping and fallbacks
+        start_date = (datetime.now() - timedelta(days=365*10)).strftime('%Y-%m-%d')
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        if is_crypto:
+            monthly_raw = get_binance_historical(symbol, '1M', 365 * 10)
+            weekly_raw = get_binance_historical(symbol, '1w', 365 * 5)
+            daily_raw = get_binance_historical(symbol, '1d', 365 * 2)
+            h4_raw = get_binance_historical(symbol, '4h', 365)
+        else:
+            # Primary: investing.com
+            daily_raw = get_historical_from_investing(symbol, start_date, end_date)
+            if daily_raw.empty and is_ngx:
+                # Fallback for NGX: NGX Group
+                daily_raw = get_ngx_daily_from_ngxgroup()
+            if daily_raw.empty:
+                # Ultimate fallback: yf
+                daily_raw = yf.download(symbol, start=start_date, end=end_date, progress=False)
+            if daily_raw.empty and is_ngx:
+                # Additional fallback: TradingView
+                daily_raw = get_historical_from_tradingview(symbol, '1D', start_date, end_date)
+            
+            monthly_raw = daily_raw.resample('M').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
+            weekly_raw = daily_raw.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
+            # For H4, use yf as primary for non-crypto
+            h1_raw = yf.download(symbol, period='730d', interval='1h', progress=False)
+            h4_raw = h1_raw.resample('4H').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
+        
+        if monthly_raw.empty or weekly_raw.empty or daily_raw.empty or h4_raw.empty or len(monthly_raw) < 24 or len(weekly_raw) < 100 or len(daily_raw) < 100 or len(h4_raw) < 100:
+            print(f"Insufficient data for {symbol}")
+            return None
+        
+        # Convert to Heikin-Ashi
+        monthly = heikin_ashi(monthly_raw)
+        weekly = heikin_ashi(weekly_raw)
+        daily = heikin_ashi(daily_raw)
+        h4 = heikin_ashi(h4_raw)
+        
+        # Calculate indicators (including MACD)
+        monthly_indicators = calculate_ha_indicators(monthly)
+        weekly_indicators = calculate_ha_indicators(weekly)
+        daily_indicators = calculate_ha_indicators(daily)
+        h4_indicators = calculate_ha_indicators(h4)
+        
+        # Detect pivots
+        monthly_pivots = detect_zigzag_pivots(monthly)
+        weekly_pivots = detect_zigzag_pivots(weekly)
+        daily_pivots = detect_zigzag_pivots(daily)
+        h4_pivots = detect_zigzag_pivots(h4)
+        
+        # Detect patterns
+        monthly_waves = detect_elliott_waves(monthly_pivots, monthly['HA_Close'])
+        weekly_waves = detect_elliott_waves(weekly_pivots, weekly['HA_Close'])
+        daily_waves = detect_elliott_waves(daily_pivots, daily['HA_Close'])
+        h4_waves = detect_elliott_waves(h4_pivots, h4['HA_Close'])
+        
+        monthly_confluence = detect_confluence(monthly, monthly_pivots)
+        weekly_confluence = detect_confluence(weekly, weekly_pivots)
+        daily_confluence = detect_confluence(daily, daily_pivots)
+        h4_confluence = detect_confluence(h4, h4_pivots)
+        
+        # Rest of the analysis same
+        
+        return {
+            # same
+        }
+    except Exception as e:
+        print(f"Error analyzing {symbol}: {str(e)}")
+        return None
+
+# ================= ADVANCED ELLIOTT WAVE =================
+# (Already advanced, as per previous)
+
+# ================= MAIN EXECUTION =================
+# (Same)
+
+if __name__ == "__main__":
+    # same
