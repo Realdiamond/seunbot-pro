@@ -12,14 +12,14 @@ class FinancialDataAPI {
     };
 
     // Provider priority (can be configured via env)
-    this.providerPriority = (import.meta.env.VITE_API_PROVIDER_PRIORITY || 'twelvedata,alphavantage,fmp,polygon').split(',');
+    this.providerPriority = (import.meta.env.VITE_API_PROVIDER_PRIORITY || 'twelvedata,fmp,alphavantage,polygon').split(',');
 
     // API endpoints
     this.endpoints = {
       twelvedata: 'https://api.twelvedata.com',
       alphavantage: 'https://www.alphavantage.co/query',
       fmp: 'https://financialmodelingprep.com/api/v3',
-      polygon: 'https://api.polygon.io/v2'
+      polygon: 'https://api.polygon.io'
     };
 
     // Complete list of 145 NGX stocks with realistic base prices
@@ -253,55 +253,113 @@ class FinancialDataAPI {
   async fetchFromTwelveData() {
     const stocks = [];
     const allSymbols = { ...this.ngxStocks, ...this.ngxETFs };
-    const symbols = Object.keys(allSymbols);
+    // TwelveData free tier has limited requests; fetch top symbols in batches
+    const topSymbols = ['GTCO', 'ZENITHBANK', 'UBA', 'ACCESSCORP', 'FBNH', 'STANBIC',
+      'DANGCEM', 'BUACEMENT', 'SEPLAT', 'MTNN', 'AIRTELAFRI', 'NESTLE',
+      'BUAFOODS', 'NB', 'GUINNESS', 'TRANSCORP', 'OANDO', 'FLOURMILL',
+      'DANGSUGAR', 'PRESCO', 'OKOMUOIL', 'WAPCO', 'TOTAL', 'FIDELITYBK',
+      'FCMB', 'CUSTODIAN', 'UACN', 'FIDSON', 'CADBURY', 'NGXGROUP'];
 
     try {
-      // Twelve Data supports batch requests
-      const symbolList = symbols.join(',');
-      const response = await axios.get(`${this.endpoints.twelvedata}/quote`, {
-        params: {
-          symbol: symbolList,
-          apikey: this.apiKeys.twelvedata,
-          exchange: 'NGX'
-        },
-        timeout: 10000
-      });
+      // Twelve Data supports batch requests (up to 8 symbols per request on free tier)
+      const batchSize = 8;
+      for (let i = 0; i < topSymbols.length; i += batchSize) {
+        const batch = topSymbols.slice(i, i + batchSize);
+        const symbolList = batch.join(',');
 
-      if (response.data) {
-        const quotes = Array.isArray(response.data) ? response.data : [response.data];
-        
-        quotes.forEach(quote => {
-          if (quote.symbol && quote.close) {
-            const symbol = quote.symbol.replace('.NGX', '').toUpperCase();
-            const knownStock = allSymbols[symbol];
-            
-            stocks.push({
-              symbol: symbol,
-              name: knownStock?.name || quote.name || symbol,
-              price: parseFloat(quote.close),
-              change: parseFloat(quote.change || 0),
-              changePercent: parseFloat(quote.percent_change || 0),
-              volume: parseInt(quote.volume || 0),
-              high: parseFloat(quote.high || quote.close * 1.02),
-              low: parseFloat(quote.low || quote.close * 0.98),
-              open: parseFloat(quote.open || quote.close),
-              previousClose: parseFloat(quote.previous_close || quote.close),
-              timestamp: new Date().toISOString(),
-              sector: knownStock?.sector || 'Other',
-              type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
-              isMock: false,
-              sources: ['Twelve Data API']
+        try {
+          const response = await axios.get(`${this.endpoints.twelvedata}/quote`, {
+            params: {
+              symbol: symbolList,
+              apikey: this.apiKeys.twelvedata,
+              exchange: 'NGX'
+            },
+            timeout: 10000
+          });
+
+          if (response.data) {
+            // Handle both single and batch responses
+            const quotes = typeof response.data === 'object' && !Array.isArray(response.data)
+              ? (response.data.symbol ? [response.data] : Object.values(response.data))
+              : (Array.isArray(response.data) ? response.data : [response.data]);
+
+            quotes.forEach(quote => {
+              if (quote && quote.symbol && (quote.close || quote.price)) {
+                const symbol = quote.symbol.replace('.NGX', '').replace(':NGX', '').toUpperCase();
+                const knownStock = allSymbols[symbol];
+                const price = parseFloat(quote.close || quote.price || 0);
+
+                if (price > 0) {
+                  const prevClose = parseFloat(quote.previous_close || quote.open || price);
+                  stocks.push({
+                    symbol: symbol,
+                    name: knownStock?.name || quote.name || symbol,
+                    price: price,
+                    change: parseFloat(quote.change || (price - prevClose).toFixed(2)),
+                    changePercent: parseFloat(quote.percent_change || ((price - prevClose) / prevClose * 100).toFixed(2)),
+                    volume: parseInt(quote.volume || 0),
+                    high: parseFloat(quote.high || price * 1.02),
+                    low: parseFloat(quote.low || price * 0.98),
+                    open: parseFloat(quote.open || price),
+                    previousClose: prevClose,
+                    timestamp: new Date().toISOString(),
+                    sector: knownStock?.sector || 'Other',
+                    type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
+                    isMock: false,
+                    sources: ['Twelve Data API']
+                  });
+                }
+              }
             });
           }
-        });
+        } catch (batchError) {
+          console.warn(`⚠️ TwelveData batch ${i / batchSize + 1} failed:`, batchError.message);
+        }
+
+        // Rate limiting between batches
+        if (i + batchSize < topSymbols.length) {
+          await new Promise(resolve => setTimeout(resolve, 1200));
+        }
       }
 
       if (stocks.length > 0) {
+        // Fill remaining symbols with fallback data enriched by live data context
+        const fetchedSymbols = new Set(stocks.map(s => s.symbol));
+        const remainingSymbols = Object.keys(allSymbols).filter(s => !fetchedSymbols.has(s));
+        const avgChange = stocks.reduce((sum, s) => sum + s.changePercent, 0) / stocks.length;
+
+        remainingSymbols.forEach(symbol => {
+          const data = allSymbols[symbol];
+          // Use market-correlated variation based on live data
+          const correlation = 0.5 + Math.random() * 0.5;
+          const volatility = avgChange * correlation + (Math.random() - 0.5) * 2;
+          const price = data.price * (1 + volatility / 100);
+          const change = price - data.price;
+
+          stocks.push({
+            symbol: symbol,
+            name: data.name,
+            price: price,
+            change: change,
+            changePercent: (change / data.price) * 100,
+            volume: Math.floor(500000 + Math.random() * 5000000),
+            high: price * 1.015,
+            low: price * 0.985,
+            open: data.price,
+            previousClose: data.price,
+            timestamp: new Date().toISOString(),
+            sector: data.sector,
+            type: data.type || (data.sector === 'ETF' ? 'ETF' : 'Stock'),
+            isMock: true,
+            sources: ['Market-Correlated Estimate (TwelveData base)']
+          });
+        });
+
         return {
           stocks: stocks,
           marketSummary: this.calculateMarketSummary(stocks),
           totalStocks: stocks.length,
-          sources: ['Twelve Data API'],
+          sources: ['Twelve Data API', 'Market-Correlated Estimates'],
           timestamp: new Date().toISOString(),
           isMock: false
         };
@@ -318,19 +376,389 @@ class FinancialDataAPI {
 
   // Alpha Vantage API
   async fetchFromAlphaVantage() {
-    // Skip due to rate limits for 160 securities
+    const stocks = [];
+    const allSymbols = { ...this.ngxStocks, ...this.ngxETFs };
+
+    // Alpha Vantage free tier: 25 calls/day - fetch key NGX stocks
+    // Alpha Vantage uses format like "SYMBOL.NGX" for Nigerian stocks
+    const prioritySymbols = [
+      'GTCO', 'ZENITHBANK', 'UBA', 'DANGCEM', 'MTNN',
+      'SEPLAT', 'NESTLE', 'BUACEMENT', 'AIRTELAFRI', 'ACCESSCORP',
+      'FBNH', 'NB', 'BUAFOODS', 'TRANSCORP', 'OANDO'
+    ];
+
+    for (const symbol of prioritySymbols) {
+      try {
+        const response = await axios.get(this.endpoints.alphavantage, {
+          params: {
+            function: 'GLOBAL_QUOTE',
+            symbol: `${symbol}.NGX`,
+            apikey: this.apiKeys.alphavantage
+          },
+          timeout: 10000
+        });
+
+        const quote = response.data?.['Global Quote'];
+        if (quote && quote['05. price']) {
+          const price = parseFloat(quote['05. price']);
+          const prevClose = parseFloat(quote['08. previous close'] || price);
+          const change = parseFloat(quote['09. change'] || (price - prevClose));
+          const changePercent = parseFloat((quote['10. change percent'] || '0').replace('%', ''));
+          const knownStock = allSymbols[symbol];
+
+          if (price > 0) {
+            stocks.push({
+              symbol: symbol,
+              name: knownStock?.name || symbol,
+              price: price,
+              change: change,
+              changePercent: changePercent,
+              volume: parseInt(quote['06. volume'] || 0),
+              high: parseFloat(quote['03. high'] || price * 1.02),
+              low: parseFloat(quote['04. low'] || price * 0.98),
+              open: parseFloat(quote['02. open'] || price),
+              previousClose: prevClose,
+              timestamp: quote['07. latest trading day'] || new Date().toISOString(),
+              sector: knownStock?.sector || 'Other',
+              type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
+              isMock: false,
+              sources: ['Alpha Vantage API']
+            });
+          }
+        }
+
+        // Alpha Vantage rate limit: 5 calls/minute on free tier
+        await new Promise(resolve => setTimeout(resolve, 12500));
+      } catch (error) {
+        if (error.response?.status === 429) {
+          console.warn('⚠️ Alpha Vantage rate limit reached');
+          break;
+        }
+        console.warn(`⚠️ Alpha Vantage failed for ${symbol}:`, error.message);
+      }
+    }
+
+    if (stocks.length > 0) {
+      // Fill remaining with correlated estimates
+      const fetchedSymbols = new Set(stocks.map(s => s.symbol));
+      const avgChange = stocks.reduce((sum, s) => sum + s.changePercent, 0) / stocks.length;
+
+      Object.entries(allSymbols).forEach(([symbol, data]) => {
+        if (!fetchedSymbols.has(symbol)) {
+          const correlation = 0.4 + Math.random() * 0.6;
+          const volatility = avgChange * correlation + (Math.random() - 0.5) * 2;
+          const price = data.price * (1 + volatility / 100);
+          const change = price - data.price;
+
+          stocks.push({
+            symbol: symbol,
+            name: data.name,
+            price: price,
+            change: change,
+            changePercent: (change / data.price) * 100,
+            volume: Math.floor(500000 + Math.random() * 5000000),
+            high: price * 1.015,
+            low: price * 0.985,
+            open: data.price,
+            previousClose: data.price,
+            timestamp: new Date().toISOString(),
+            sector: data.sector,
+            type: data.type || (data.sector === 'ETF' ? 'ETF' : 'Stock'),
+            isMock: true,
+            sources: ['Market-Correlated Estimate (AlphaVantage base)']
+          });
+        }
+      });
+
+      return {
+        stocks: stocks,
+        marketSummary: this.calculateMarketSummary(stocks),
+        totalStocks: stocks.length,
+        sources: ['Alpha Vantage API', 'Market-Correlated Estimates'],
+        timestamp: new Date().toISOString(),
+        isMock: false
+      };
+    }
+
     return null;
   }
 
   // Financial Modeling Prep API
   async fetchFromFMP() {
-    // Skip due to complexity with 160 securities
+    const stocks = [];
+    const allSymbols = { ...this.ngxStocks, ...this.ngxETFs };
+
+    try {
+      // FMP supports batch quote endpoint
+      const prioritySymbols = [
+        'GTCO', 'ZENITHBANK', 'UBA', 'DANGCEM', 'MTNN',
+        'SEPLAT', 'NESTLE', 'BUACEMENT', 'AIRTELAFRI', 'ACCESSCORP',
+        'FBNH', 'NB', 'BUAFOODS', 'TRANSCORP', 'OANDO',
+        'STANBIC', 'FIDELITYBK', 'DANGSUGAR', 'FLOURMILL', 'GUINNESS'
+      ];
+
+      // Try batch quote first - FMP uses .NG suffix for Nigerian stocks
+      const fmpSymbols = prioritySymbols.map(s => `${s}.NG`).join(',');
+
+      try {
+        const response = await axios.get(`${this.endpoints.fmp}/quote/${fmpSymbols}`, {
+          params: { apikey: this.apiKeys.fmp },
+          timeout: 15000
+        });
+
+        if (Array.isArray(response.data)) {
+          response.data.forEach(quote => {
+            if (quote && quote.price > 0) {
+              const symbol = quote.symbol.replace('.NG', '').toUpperCase();
+              const knownStock = allSymbols[symbol];
+
+              stocks.push({
+                symbol: symbol,
+                name: knownStock?.name || quote.name || symbol,
+                price: quote.price,
+                change: quote.change || 0,
+                changePercent: quote.changesPercentage || 0,
+                volume: quote.volume || 0,
+                high: quote.dayHigh || quote.price * 1.02,
+                low: quote.dayLow || quote.price * 0.98,
+                open: quote.open || quote.price,
+                previousClose: quote.previousClose || quote.price,
+                timestamp: quote.timestamp || new Date().toISOString(),
+                sector: knownStock?.sector || 'Other',
+                type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
+                isMock: false,
+                sources: ['Financial Modeling Prep API']
+              });
+            }
+          });
+        }
+      } catch (batchError) {
+        console.warn('⚠️ FMP batch quote failed, trying individual:', batchError.message);
+
+        // Fallback: try individual quotes for top symbols
+        for (const symbol of prioritySymbols.slice(0, 10)) {
+          try {
+            const response = await axios.get(`${this.endpoints.fmp}/quote/${symbol}.NG`, {
+              params: { apikey: this.apiKeys.fmp },
+              timeout: 8000
+            });
+
+            if (Array.isArray(response.data) && response.data.length > 0) {
+              const quote = response.data[0];
+              if (quote && quote.price > 0) {
+                const knownStock = allSymbols[symbol];
+                stocks.push({
+                  symbol: symbol,
+                  name: knownStock?.name || quote.name || symbol,
+                  price: quote.price,
+                  change: quote.change || 0,
+                  changePercent: quote.changesPercentage || 0,
+                  volume: quote.volume || 0,
+                  high: quote.dayHigh || quote.price * 1.02,
+                  low: quote.dayLow || quote.price * 0.98,
+                  open: quote.open || quote.price,
+                  previousClose: quote.previousClose || quote.price,
+                  timestamp: new Date().toISOString(),
+                  sector: knownStock?.sector || 'Other',
+                  type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
+                  isMock: false,
+                  sources: ['Financial Modeling Prep API']
+                });
+              }
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (err) {
+            console.warn(`⚠️ FMP individual quote failed for ${symbol}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ FMP API error:', error.message);
+    }
+
+    if (stocks.length > 0) {
+      // Fill remaining with correlated estimates
+      const fetchedSymbols = new Set(stocks.map(s => s.symbol));
+      const avgChange = stocks.reduce((sum, s) => sum + s.changePercent, 0) / stocks.length;
+
+      Object.entries(allSymbols).forEach(([symbol, data]) => {
+        if (!fetchedSymbols.has(symbol)) {
+          const correlation = 0.4 + Math.random() * 0.6;
+          const volatility = avgChange * correlation + (Math.random() - 0.5) * 2;
+          const price = data.price * (1 + volatility / 100);
+          const change = price - data.price;
+
+          stocks.push({
+            symbol: symbol,
+            name: data.name,
+            price: price,
+            change: change,
+            changePercent: (change / data.price) * 100,
+            volume: Math.floor(500000 + Math.random() * 5000000),
+            high: price * 1.015,
+            low: price * 0.985,
+            open: data.price,
+            previousClose: data.price,
+            timestamp: new Date().toISOString(),
+            sector: data.sector,
+            type: data.type || (data.sector === 'ETF' ? 'ETF' : 'Stock'),
+            isMock: true,
+            sources: ['Market-Correlated Estimate (FMP base)']
+          });
+        }
+      });
+
+      return {
+        stocks: stocks,
+        marketSummary: this.calculateMarketSummary(stocks),
+        totalStocks: stocks.length,
+        sources: ['Financial Modeling Prep API', 'Market-Correlated Estimates'],
+        timestamp: new Date().toISOString(),
+        isMock: false
+      };
+    }
+
     return null;
   }
 
   // Polygon.io API
   async fetchFromPolygon() {
-    // Skip due to rate limits for 160 securities
+    const stocks = [];
+    const allSymbols = { ...this.ngxStocks, ...this.ngxETFs };
+
+    // Polygon free tier: 5 calls/minute
+    const prioritySymbols = [
+      'GTCO', 'ZENITHBANK', 'UBA', 'DANGCEM', 'MTNN',
+      'SEPLAT', 'NESTLE', 'BUACEMENT', 'AIRTELAFRI', 'ACCESSCORP'
+    ];
+
+    for (const symbol of prioritySymbols) {
+      try {
+        // Polygon uses ticker format - try with exchange prefix
+        const response = await axios.get(
+          `${this.endpoints.polygon}/v2/aggs/ticker/X:${symbol}NGX/prev`, {
+            params: { apiKey: this.apiKeys.polygon },
+            timeout: 8000
+          }
+        );
+
+        if (response.data?.results && response.data.results.length > 0) {
+          const result = response.data.results[0];
+          const knownStock = allSymbols[symbol];
+          const price = result.c || result.vw || 0;
+          const prevClose = result.o || price;
+
+          if (price > 0) {
+            stocks.push({
+              symbol: symbol,
+              name: knownStock?.name || symbol,
+              price: price,
+              change: price - prevClose,
+              changePercent: ((price - prevClose) / prevClose) * 100,
+              volume: result.v || 0,
+              high: result.h || price * 1.02,
+              low: result.l || price * 0.98,
+              open: result.o || price,
+              previousClose: prevClose,
+              timestamp: new Date(result.t || Date.now()).toISOString(),
+              sector: knownStock?.sector || 'Other',
+              type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
+              isMock: false,
+              sources: ['Polygon.io API']
+            });
+          }
+        }
+
+        // Rate limit: 5 calls/minute
+        await new Promise(resolve => setTimeout(resolve, 12500));
+      } catch (error) {
+        if (error.response?.status === 429) {
+          console.warn('⚠️ Polygon rate limit reached');
+          break;
+        }
+        // Try alternative ticker format
+        try {
+          const response = await axios.get(
+            `${this.endpoints.polygon}/v2/snapshot/locale/global/markets/stocks/tickers/${symbol}`, {
+              params: { apiKey: this.apiKeys.polygon },
+              timeout: 8000
+            }
+          );
+
+          if (response.data?.ticker) {
+            const ticker = response.data.ticker;
+            const knownStock = allSymbols[symbol];
+            const price = ticker.lastTrade?.p || ticker.day?.c || 0;
+
+            if (price > 0) {
+              stocks.push({
+                symbol: symbol,
+                name: knownStock?.name || symbol,
+                price: price,
+                change: ticker.todaysChange || 0,
+                changePercent: ticker.todaysChangePerc || 0,
+                volume: ticker.day?.v || 0,
+                high: ticker.day?.h || price * 1.02,
+                low: ticker.day?.l || price * 0.98,
+                open: ticker.day?.o || price,
+                previousClose: ticker.prevDay?.c || price,
+                timestamp: new Date().toISOString(),
+                sector: knownStock?.sector || 'Other',
+                type: knownStock?.type || (knownStock?.sector === 'ETF' ? 'ETF' : 'Stock'),
+                isMock: false,
+                sources: ['Polygon.io API']
+              });
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 12500));
+        } catch (altError) {
+          console.warn(`⚠️ Polygon failed for ${symbol}:`, altError.message);
+        }
+      }
+    }
+
+    if (stocks.length > 0) {
+      // Fill remaining with correlated estimates
+      const fetchedSymbols = new Set(stocks.map(s => s.symbol));
+      const avgChange = stocks.reduce((sum, s) => sum + s.changePercent, 0) / stocks.length;
+
+      Object.entries(allSymbols).forEach(([symbol, data]) => {
+        if (!fetchedSymbols.has(symbol)) {
+          const correlation = 0.4 + Math.random() * 0.6;
+          const volatility = avgChange * correlation + (Math.random() - 0.5) * 2;
+          const price = data.price * (1 + volatility / 100);
+          const change = price - data.price;
+
+          stocks.push({
+            symbol: symbol,
+            name: data.name,
+            price: price,
+            change: change,
+            changePercent: (change / data.price) * 100,
+            volume: Math.floor(500000 + Math.random() * 5000000),
+            high: price * 1.015,
+            low: price * 0.985,
+            open: data.price,
+            previousClose: data.price,
+            timestamp: new Date().toISOString(),
+            sector: data.sector,
+            type: data.type || (data.sector === 'ETF' ? 'ETF' : 'Stock'),
+            isMock: true,
+            sources: ['Market-Correlated Estimate (Polygon base)']
+          });
+        }
+      });
+
+      return {
+        stocks: stocks,
+        marketSummary: this.calculateMarketSummary(stocks),
+        totalStocks: stocks.length,
+        sources: ['Polygon.io API', 'Market-Correlated Estimates'],
+        timestamp: new Date().toISOString(),
+        isMock: false
+      };
+    }
+
     return null;
   }
 

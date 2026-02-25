@@ -1,15 +1,25 @@
-// S&P 500 Real-Time Data Service - Fetches data from Yahoo Finance, Google Finance, and Alpha Vantage
+// S&P 500 Real-Time Data Service - Multi-provider with TwelveData, FMP, Alpha Vantage, Polygon fallbacks
 import axios from 'axios';
 
 class SP500DataService {
   constructor() {
+    // API Keys from environment variables
+    this.apiKeys = {
+      twelvedata: import.meta.env.VITE_TWELVEDATA_API_KEY,
+      alphavantage: import.meta.env.VITE_ALPHAVANTAGE_API_KEY,
+      fmp: import.meta.env.VITE_FMP_API_KEY,
+      polygon: import.meta.env.VITE_POLYGON_API_KEY
+    };
+
     // Multiple API endpoints for redundancy
     this.yahooFinanceAPI = 'https://query1.finance.yahoo.com/v8/finance/chart/';
     this.yahooQuoteAPI = 'https://query1.finance.yahoo.com/v7/finance/quote';
     this.googleFinanceAPI = 'https://www.google.com/finance/quote/';
+    this.twelveDataAPI = 'https://api.twelvedata.com';
+    this.fmpAPI = 'https://financialmodelingprep.com/api/v3';
     this.alphaVantageAPI = 'https://www.alphavantage.co/query';
-    this.alphaVantageKey = 'demo'; // Replace with actual key if available
-    
+    this.polygonAPI = 'https://api.polygon.io';
+
     // Cache for API responses
     this.cache = {
       stocks: new Map(),
@@ -152,10 +162,345 @@ class SP500DataService {
     ];
   }
 
-  // Fetch from Google Finance (web scraping alternative)
+  // ==================== FMP Provider ====================
+  async fetchFromFMP(symbol) {
+    try {
+      if (!this.apiKeys.fmp) return null;
+
+      const response = await axios.get(`${this.fmpAPI}/quote/${symbol}`, {
+        params: { apikey: this.apiKeys.fmp },
+        timeout: 8000
+      });
+
+      if (Array.isArray(response.data) && response.data.length > 0) {
+        const quote = response.data[0];
+        if (quote && quote.price > 0) {
+          return {
+            symbol: symbol,
+            name: this.sp500Stocks.find(s => s.symbol === symbol)?.name || quote.name || symbol,
+            sector: this.sp500Stocks.find(s => s.symbol === symbol)?.sector || 'Unknown',
+            price: quote.price,
+            open: quote.open || quote.price,
+            high: quote.dayHigh || quote.price * 1.01,
+            low: quote.dayLow || quote.price * 0.99,
+            close: quote.price,
+            volume: quote.volume || 0,
+            previousClose: quote.previousClose || quote.price,
+            change: quote.change || 0,
+            changePercent: quote.changesPercentage || 0,
+            marketCap: quote.marketCap || 0,
+            timestamp: new Date().toISOString(),
+            isMock: false,
+            sources: ['Financial Modeling Prep']
+          };
+        }
+      }
+      return null;
+    } catch (error) {
+      console.warn(`FMP fetch failed for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  // FMP batch fetch
+  async fetchBatchFromFMP(symbols) {
+    try {
+      if (!this.apiKeys.fmp) return [];
+
+      const symbolsStr = symbols.join(',');
+      const response = await axios.get(`${this.fmpAPI}/quote/${symbolsStr}`, {
+        params: { apikey: this.apiKeys.fmp },
+        timeout: 15000
+      });
+
+      if (Array.isArray(response.data)) {
+        return response.data
+          .filter(quote => quote && quote.price > 0)
+          .map(quote => ({
+            symbol: quote.symbol,
+            name: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.name || quote.name || quote.symbol,
+            sector: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.sector || 'Unknown',
+            price: quote.price,
+            open: quote.open || quote.price,
+            high: quote.dayHigh || quote.price * 1.01,
+            low: quote.dayLow || quote.price * 0.99,
+            close: quote.price,
+            volume: quote.volume || 0,
+            previousClose: quote.previousClose || quote.price,
+            change: quote.change || 0,
+            changePercent: quote.changesPercentage || 0,
+            marketCap: quote.marketCap || 0,
+            timestamp: new Date().toISOString(),
+            isMock: false,
+            sources: ['Financial Modeling Prep']
+          }));
+      }
+      return [];
+    } catch (error) {
+      console.warn('FMP batch fetch failed:', error.message);
+      return [];
+    }
+  }
+
+  // ==================== TwelveData Provider ====================
+  async fetchFromTwelveData(symbol) {
+    try {
+      if (!this.apiKeys.twelvedata) return null;
+
+      const response = await axios.get(`${this.twelveDataAPI}/quote`, {
+        params: {
+          symbol: symbol,
+          apikey: this.apiKeys.twelvedata
+        },
+        timeout: 8000
+      });
+
+      const quote = response.data;
+      if (quote && (quote.close || quote.price)) {
+        const price = parseFloat(quote.close || quote.price);
+        const prevClose = parseFloat(quote.previous_close || quote.open || price);
+
+        return {
+          symbol: symbol,
+          name: this.sp500Stocks.find(s => s.symbol === symbol)?.name || quote.name || symbol,
+          sector: this.sp500Stocks.find(s => s.symbol === symbol)?.sector || 'Unknown',
+          price: price,
+          open: parseFloat(quote.open || price),
+          high: parseFloat(quote.high || price * 1.01),
+          low: parseFloat(quote.low || price * 0.99),
+          close: price,
+          volume: parseInt(quote.volume || 0),
+          previousClose: prevClose,
+          change: parseFloat(quote.change || (price - prevClose)),
+          changePercent: parseFloat(quote.percent_change || ((price - prevClose) / prevClose * 100)),
+          marketCap: 0,
+          timestamp: new Date().toISOString(),
+          isMock: false,
+          sources: ['Twelve Data']
+        };
+      }
+      return null;
+    } catch (error) {
+      console.warn(`TwelveData fetch failed for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  // TwelveData batch fetch (up to 8 symbols per request on free tier)
+  async fetchBatchFromTwelveData(symbols) {
+    try {
+      if (!this.apiKeys.twelvedata) return [];
+
+      const results = [];
+      const batchSize = 8;
+
+      for (let i = 0; i < symbols.length; i += batchSize) {
+        const batch = symbols.slice(i, i + batchSize);
+        const symbolList = batch.join(',');
+
+        try {
+          const response = await axios.get(`${this.twelveDataAPI}/quote`, {
+            params: {
+              symbol: symbolList,
+              apikey: this.apiKeys.twelvedata
+            },
+            timeout: 10000
+          });
+
+          if (response.data) {
+            // Handle both single and multi-symbol responses
+            const quotes = batch.length === 1
+              ? [response.data]
+              : Object.values(response.data);
+
+            quotes.forEach(quote => {
+              if (quote && quote.symbol && (quote.close || quote.price)) {
+                const price = parseFloat(quote.close || quote.price);
+                const prevClose = parseFloat(quote.previous_close || quote.open || price);
+
+                if (price > 0) {
+                  results.push({
+                    symbol: quote.symbol,
+                    name: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.name || quote.name || quote.symbol,
+                    sector: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.sector || 'Unknown',
+                    price: price,
+                    open: parseFloat(quote.open || price),
+                    high: parseFloat(quote.high || price * 1.01),
+                    low: parseFloat(quote.low || price * 0.99),
+                    close: price,
+                    volume: parseInt(quote.volume || 0),
+                    previousClose: prevClose,
+                    change: parseFloat(quote.change || (price - prevClose)),
+                    changePercent: parseFloat(quote.percent_change || ((price - prevClose) / prevClose * 100)),
+                    marketCap: 0,
+                    timestamp: new Date().toISOString(),
+                    isMock: false,
+                    sources: ['Twelve Data']
+                  });
+                }
+              }
+            });
+          }
+        } catch (batchError) {
+          console.warn(`TwelveData batch failed:`, batchError.message);
+        }
+
+        // Rate limiting
+        if (i + batchSize < symbols.length) {
+          await new Promise(resolve => setTimeout(resolve, 1200));
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.warn('TwelveData batch fetch failed:', error.message);
+      return [];
+    }
+  }
+
+  // ==================== Alpha Vantage Provider ====================
+  async fetchFromAlphaVantage(symbol) {
+    try {
+      if (!this.apiKeys.alphavantage) return null;
+
+      const response = await axios.get(this.alphaVantageAPI, {
+        params: {
+          function: 'GLOBAL_QUOTE',
+          symbol: symbol,
+          apikey: this.apiKeys.alphavantage
+        },
+        timeout: 10000
+      });
+
+      const quote = response.data?.['Global Quote'];
+      if (quote && quote['05. price']) {
+        const price = parseFloat(quote['05. price']);
+        const prevClose = parseFloat(quote['08. previous close'] || price);
+
+        return {
+          symbol: symbol,
+          name: this.sp500Stocks.find(s => s.symbol === symbol)?.name || symbol,
+          sector: this.sp500Stocks.find(s => s.symbol === symbol)?.sector || 'Unknown',
+          price: price,
+          open: parseFloat(quote['02. open'] || price),
+          high: parseFloat(quote['03. high'] || price * 1.01),
+          low: parseFloat(quote['04. low'] || price * 0.99),
+          close: price,
+          volume: parseInt(quote['06. volume'] || 0),
+          previousClose: prevClose,
+          change: parseFloat(quote['09. change'] || (price - prevClose)),
+          changePercent: parseFloat((quote['10. change percent'] || '0').replace('%', '')),
+          marketCap: 0,
+          timestamp: quote['07. latest trading day'] || new Date().toISOString(),
+          isMock: false,
+          sources: ['Alpha Vantage']
+        };
+      }
+      return null;
+    } catch (error) {
+      console.warn(`Alpha Vantage fetch failed for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  // ==================== Polygon Provider ====================
+  async fetchFromPolygon(symbol) {
+    try {
+      if (!this.apiKeys.polygon) return null;
+
+      const response = await axios.get(
+        `${this.polygonAPI}/v2/aggs/ticker/${symbol}/prev`, {
+          params: { apiKey: this.apiKeys.polygon },
+          timeout: 8000
+        }
+      );
+
+      if (response.data?.results && response.data.results.length > 0) {
+        const result = response.data.results[0];
+        const price = result.c || result.vw || 0;
+        const prevClose = result.o || price;
+
+        if (price > 0) {
+          return {
+            symbol: symbol,
+            name: this.sp500Stocks.find(s => s.symbol === symbol)?.name || symbol,
+            sector: this.sp500Stocks.find(s => s.symbol === symbol)?.sector || 'Unknown',
+            price: price,
+            open: result.o || price,
+            high: result.h || price * 1.01,
+            low: result.l || price * 0.99,
+            close: price,
+            volume: result.v || 0,
+            previousClose: prevClose,
+            change: price - prevClose,
+            changePercent: ((price - prevClose) / prevClose) * 100,
+            marketCap: 0,
+            timestamp: new Date(result.t || Date.now()).toISOString(),
+            isMock: false,
+            sources: ['Polygon.io']
+          };
+        }
+      }
+      return null;
+    } catch (error) {
+      console.warn(`Polygon fetch failed for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  // Polygon batch via snapshot
+  async fetchBatchFromPolygon(symbols) {
+    try {
+      if (!this.apiKeys.polygon) return [];
+
+      // Polygon snapshot endpoint for US market
+      const response = await axios.get(
+        `${this.polygonAPI}/v2/snapshot/locale/us/markets/stocks/tickers`, {
+          params: {
+            tickers: symbols.join(','),
+            apiKey: this.apiKeys.polygon
+          },
+          timeout: 15000
+        }
+      );
+
+      if (response.data?.tickers) {
+        return response.data.tickers
+          .filter(ticker => ticker && ticker.day)
+          .map(ticker => {
+            const price = ticker.day?.c || ticker.lastTrade?.p || 0;
+            const prevClose = ticker.prevDay?.c || price;
+
+            return {
+              symbol: ticker.ticker,
+              name: this.sp500Stocks.find(s => s.symbol === ticker.ticker)?.name || ticker.ticker,
+              sector: this.sp500Stocks.find(s => s.symbol === ticker.ticker)?.sector || 'Unknown',
+              price: price,
+              open: ticker.day?.o || price,
+              high: ticker.day?.h || price * 1.01,
+              low: ticker.day?.l || price * 0.99,
+              close: price,
+              volume: ticker.day?.v || 0,
+              previousClose: prevClose,
+              change: ticker.todaysChange || (price - prevClose),
+              changePercent: ticker.todaysChangePerc || ((price - prevClose) / prevClose * 100),
+              marketCap: 0,
+              timestamp: new Date().toISOString(),
+              isMock: false,
+              sources: ['Polygon.io']
+            };
+          });
+      }
+      return [];
+    } catch (error) {
+      console.warn('Polygon batch fetch failed:', error.message);
+      return [];
+    }
+  }
+
+  // ==================== Google Finance ====================
   async fetchFromGoogleFinance(symbol) {
     try {
-      // Google Finance doesn't have a public API, but we can use their quote page
       const url = `https://www.google.com/finance/quote/${symbol}:NASDAQ`;
       const response = await axios.get(url, {
         headers: {
@@ -164,7 +509,6 @@ class SP500DataService {
         timeout: 5000
       });
 
-      // Parse HTML to extract price data (simplified - in production use proper HTML parser)
       const html = response.data;
       const priceMatch = html.match(/data-last-price="([^"]+)"/);
       const changeMatch = html.match(/data-last-change="([^"]+)"/);
@@ -183,6 +527,8 @@ class SP500DataService {
     }
   }
 
+  // ==================== Main Fetch Methods ====================
+
   // Fetch real-time stock data with multiple fallbacks
   async fetchStockData(symbol) {
     const cacheKey = `${symbol}_${Date.now() - (Date.now() % this.cache.ttl)}`;
@@ -192,9 +538,22 @@ class SP500DataService {
     }
 
     let stockData = null;
-    const sources = [];
 
-    // Try Yahoo Finance first
+    // 1. Try FMP first (best batch support, generous free tier)
+    stockData = await this.fetchFromFMP(symbol);
+    if (stockData) {
+      this.cache.stocks.set(cacheKey, stockData);
+      return stockData;
+    }
+
+    // 2. Try TwelveData
+    stockData = await this.fetchFromTwelveData(symbol);
+    if (stockData) {
+      this.cache.stocks.set(cacheKey, stockData);
+      return stockData;
+    }
+
+    // 3. Try Yahoo Finance
     try {
       const response = await axios.get(`${this.yahooFinanceAPI}${symbol}`, {
         params: {
@@ -230,88 +589,158 @@ class SP500DataService {
         isMock: false,
         sources: ['Yahoo Finance']
       };
-      sources.push('Yahoo Finance');
     } catch (error) {
-      console.warn(`Yahoo Finance failed for ${symbol}, trying Google Finance`);
+      console.warn(`Yahoo Finance failed for ${symbol}`);
     }
 
-    // Fallback to Google Finance if Yahoo fails
-    if (!stockData) {
-      const googleData = await this.fetchFromGoogleFinance(symbol);
-      if (googleData) {
-        const previousClose = googleData.price - googleData.change;
-        stockData = {
-          symbol: symbol,
-          name: this.sp500Stocks.find(s => s.symbol === symbol)?.name || symbol,
-          sector: this.sp500Stocks.find(s => s.symbol === symbol)?.sector || 'Unknown',
-          price: googleData.price,
-          open: googleData.price,
-          high: googleData.price * 1.02,
-          low: googleData.price * 0.98,
-          close: googleData.price,
-          volume: 1000000,
-          previousClose: previousClose,
-          change: googleData.change,
-          changePercent: (googleData.change / previousClose) * 100,
-          marketCap: 0,
-          timestamp: new Date().toISOString(),
-          isMock: false,
-          sources: ['Google Finance']
-        };
-        sources.push('Google Finance');
-      }
+    if (stockData) {
+      this.cache.stocks.set(cacheKey, stockData);
+      return stockData;
+    }
+
+    // 4. Try Polygon
+    stockData = await this.fetchFromPolygon(symbol);
+    if (stockData) {
+      this.cache.stocks.set(cacheKey, stockData);
+      return stockData;
+    }
+
+    // 5. Try Alpha Vantage
+    stockData = await this.fetchFromAlphaVantage(symbol);
+    if (stockData) {
+      this.cache.stocks.set(cacheKey, stockData);
+      return stockData;
+    }
+
+    // 6. Try Google Finance
+    const googleData = await this.fetchFromGoogleFinance(symbol);
+    if (googleData) {
+      const previousClose = googleData.price - googleData.change;
+      stockData = {
+        symbol: symbol,
+        name: this.sp500Stocks.find(s => s.symbol === symbol)?.name || symbol,
+        sector: this.sp500Stocks.find(s => s.symbol === symbol)?.sector || 'Unknown',
+        price: googleData.price,
+        open: googleData.price,
+        high: googleData.price * 1.02,
+        low: googleData.price * 0.98,
+        close: googleData.price,
+        volume: 1000000,
+        previousClose: previousClose,
+        change: googleData.change,
+        changePercent: (googleData.change / previousClose) * 100,
+        marketCap: 0,
+        timestamp: new Date().toISOString(),
+        isMock: false,
+        sources: ['Google Finance']
+      };
+      this.cache.stocks.set(cacheKey, stockData);
+      return stockData;
     }
 
     // Final fallback to realistic simulated data
-    if (!stockData) {
-      console.warn(`All APIs failed for ${symbol}, using fallback data`);
-      stockData = this.generateFallbackData(symbol);
-    }
-
+    console.warn(`All APIs failed for ${symbol}, using fallback data`);
+    stockData = this.generateFallbackData(symbol);
     this.cache.stocks.set(cacheKey, stockData);
     return stockData;
   }
 
   // Fetch multiple stocks in batch with improved error handling
   async fetchBatchStocks(symbols) {
+    // 1. Try FMP batch first (supports large batches)
+    try {
+      const fmpResults = await this.fetchBatchFromFMP(symbols);
+      if (fmpResults.length > 0) {
+        console.log(`✅ FMP batch: fetched ${fmpResults.length}/${symbols.length} stocks`);
+        // Fill any missing symbols
+        const fetchedSymbols = new Set(fmpResults.map(s => s.symbol));
+        const missing = symbols.filter(s => !fetchedSymbols.has(s));
+        if (missing.length > 0) {
+          const fallbacks = missing.map(s => this.generateFallbackData(s));
+          return [...fmpResults, ...fallbacks];
+        }
+        return fmpResults;
+      }
+    } catch (error) {
+      console.warn('FMP batch failed:', error.message);
+    }
+
+    // 2. Try TwelveData batch
+    try {
+      const tdResults = await this.fetchBatchFromTwelveData(symbols);
+      if (tdResults.length > 0) {
+        console.log(`✅ TwelveData batch: fetched ${tdResults.length}/${symbols.length} stocks`);
+        const fetchedSymbols = new Set(tdResults.map(s => s.symbol));
+        const missing = symbols.filter(s => !fetchedSymbols.has(s));
+        if (missing.length > 0) {
+          const fallbacks = missing.map(s => this.generateFallbackData(s));
+          return [...tdResults, ...fallbacks];
+        }
+        return tdResults;
+      }
+    } catch (error) {
+      console.warn('TwelveData batch failed:', error.message);
+    }
+
+    // 3. Try Yahoo Finance batch
     try {
       const symbolsString = symbols.join(',');
       const response = await axios.get(this.yahooQuoteAPI, {
-        params: {
-          symbols: symbolsString
-        },
+        params: { symbols: symbolsString },
         timeout: 15000
       });
 
       const quotes = response.data.quoteResponse.result;
-      return quotes.map(quote => {
-        const currentPrice = quote.regularMarketPrice || quote.price;
-        const previousClose = quote.regularMarketPreviousClose || currentPrice;
-        
-        return {
-          symbol: quote.symbol,
-          name: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.name || quote.shortName || quote.symbol,
-          sector: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.sector || 'Unknown',
-          price: currentPrice,
-          open: quote.regularMarketOpen || currentPrice,
-          high: quote.regularMarketDayHigh || currentPrice * 1.01,
-          low: quote.regularMarketDayLow || currentPrice * 0.99,
-          close: currentPrice,
-          volume: quote.regularMarketVolume || 0,
-          previousClose: previousClose,
-          change: quote.regularMarketChange || (currentPrice - previousClose),
-          changePercent: quote.regularMarketChangePercent || ((currentPrice - previousClose) / previousClose * 100),
-          marketCap: quote.marketCap || 0,
-          timestamp: new Date((quote.regularMarketTime || Date.now() / 1000) * 1000).toISOString(),
-          isMock: false,
-          sources: ['Yahoo Finance']
-        };
-      });
-
+      if (quotes && quotes.length > 0) {
+        console.log(`✅ Yahoo batch: fetched ${quotes.length}/${symbols.length} stocks`);
+        return quotes.map(quote => {
+          const currentPrice = quote.regularMarketPrice || quote.price;
+          const previousClose = quote.regularMarketPreviousClose || currentPrice;
+          
+          return {
+            symbol: quote.symbol,
+            name: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.name || quote.shortName || quote.symbol,
+            sector: this.sp500Stocks.find(s => s.symbol === quote.symbol)?.sector || 'Unknown',
+            price: currentPrice,
+            open: quote.regularMarketOpen || currentPrice,
+            high: quote.regularMarketDayHigh || currentPrice * 1.01,
+            low: quote.regularMarketDayLow || currentPrice * 0.99,
+            close: currentPrice,
+            volume: quote.regularMarketVolume || 0,
+            previousClose: previousClose,
+            change: quote.regularMarketChange || (currentPrice - previousClose),
+            changePercent: quote.regularMarketChangePercent || ((currentPrice - previousClose) / previousClose * 100),
+            marketCap: quote.marketCap || 0,
+            timestamp: new Date((quote.regularMarketTime || Date.now() / 1000) * 1000).toISOString(),
+            isMock: false,
+            sources: ['Yahoo Finance']
+          };
+        });
+      }
     } catch (error) {
-      console.warn('Batch fetch failed, fetching individually');
-      return Promise.all(symbols.map(symbol => this.fetchStockData(symbol)));
+      console.warn('Yahoo batch fetch failed:', error.message);
     }
+
+    // 4. Try Polygon batch
+    try {
+      const polygonResults = await this.fetchBatchFromPolygon(symbols);
+      if (polygonResults.length > 0) {
+        console.log(`✅ Polygon batch: fetched ${polygonResults.length}/${symbols.length} stocks`);
+        const fetchedSymbols = new Set(polygonResults.map(s => s.symbol));
+        const missing = symbols.filter(s => !fetchedSymbols.has(s));
+        if (missing.length > 0) {
+          const fallbacks = missing.map(s => this.generateFallbackData(s));
+          return [...polygonResults, ...fallbacks];
+        }
+        return polygonResults;
+      }
+    } catch (error) {
+      console.warn('Polygon batch failed:', error.message);
+    }
+
+    // 5. Fallback: fetch individually
+    console.warn('All batch methods failed, fetching individually');
+    return Promise.all(symbols.map(symbol => this.fetchStockData(symbol)));
   }
 
   // Get all S&P 500 stocks with improved reliability
@@ -341,7 +770,8 @@ class SP500DataService {
         }
       }
 
-      console.log(`✅ Fetched ${allStocks.length} S&P 500 stocks`);
+      const liveCount = allStocks.filter(s => !s.isMock).length;
+      console.log(`✅ Fetched ${allStocks.length} S&P 500 stocks (${liveCount} live, ${allStocks.length - liveCount} fallback)`);
       return allStocks;
 
     } catch (error) {
@@ -358,6 +788,39 @@ class SP500DataService {
       return this.cache.summary.data;
     }
 
+    // 1. Try FMP for S&P 500 index
+    try {
+      if (this.apiKeys.fmp) {
+        const response = await axios.get(`${this.fmpAPI}/quote/^GSPC`, {
+          params: { apikey: this.apiKeys.fmp },
+          timeout: 10000
+        });
+
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          const quote = response.data[0];
+          const summary = {
+            index: quote.price,
+            indexChange: quote.change || 0,
+            indexChangePercent: quote.changesPercentage || 0,
+            totalVolume: quote.volume || 0,
+            totalStocks: this.sp500Stocks.length,
+            advancers: 0,
+            decliners: 0,
+            unchanged: 0,
+            sources: ['Financial Modeling Prep'],
+            isMock: false,
+            timestamp: new Date().toISOString()
+          };
+
+          this.cache.summary = { key: cacheKey, data: summary };
+          return summary;
+        }
+      }
+    } catch (error) {
+      console.warn('FMP market summary failed:', error.message);
+    }
+
+    // 2. Try Yahoo Finance
     try {
       const response = await axios.get(`${this.yahooFinanceAPI}^GSPC`, {
         params: {
@@ -390,21 +853,62 @@ class SP500DataService {
       return summary;
 
     } catch (error) {
-      console.warn('⚠️ Market summary fetch failed, using fallback');
-      return {
-        index: 4850.00,
-        indexChange: 32.50,
-        indexChangePercent: 0.67,
-        totalVolume: 3800000000,
-        totalStocks: this.sp500Stocks.length,
-        advancers: 340,
-        decliners: 150,
-        unchanged: 10,
-        sources: [],
-        isMock: true,
-        timestamp: new Date().toISOString()
-      };
+      console.warn('Yahoo market summary failed:', error.message);
     }
+
+    // 3. Try TwelveData for SPX
+    try {
+      if (this.apiKeys.twelvedata) {
+        const response = await axios.get(`${this.twelveDataAPI}/quote`, {
+          params: {
+            symbol: 'SPX',
+            apikey: this.apiKeys.twelvedata
+          },
+          timeout: 10000
+        });
+
+        const quote = response.data;
+        if (quote && (quote.close || quote.price)) {
+          const price = parseFloat(quote.close || quote.price);
+          const prevClose = parseFloat(quote.previous_close || price);
+
+          const summary = {
+            index: price,
+            indexChange: price - prevClose,
+            indexChangePercent: ((price - prevClose) / prevClose) * 100,
+            totalVolume: parseInt(quote.volume || 0),
+            totalStocks: this.sp500Stocks.length,
+            advancers: 0,
+            decliners: 0,
+            unchanged: 0,
+            sources: ['Twelve Data'],
+            isMock: false,
+            timestamp: new Date().toISOString()
+          };
+
+          this.cache.summary = { key: cacheKey, data: summary };
+          return summary;
+        }
+      }
+    } catch (error) {
+      console.warn('TwelveData market summary failed:', error.message);
+    }
+
+    // Fallback
+    console.warn('⚠️ All market summary sources failed, using fallback');
+    return {
+      index: 4850.00,
+      indexChange: 32.50,
+      indexChangePercent: 0.67,
+      totalVolume: 3800000000,
+      totalStocks: this.sp500Stocks.length,
+      advancers: 340,
+      decliners: 150,
+      unchanged: 10,
+      sources: [],
+      isMock: true,
+      timestamp: new Date().toISOString()
+    };
   }
 
   // Generate realistic fallback data
