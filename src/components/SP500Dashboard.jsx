@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, RefreshCw, Search, Filter, Star, Brain, Target, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, RefreshCw, Search, Filter, Star, Brain, Target, Zap, Wifi, WifiOff } from 'lucide-react';
 import SP500DataService from '../services/SP500DataService';
 import AIStockAnalyzer from '../services/AIStockAnalyzer';
 import SP500AdvancedAnalysis from './SP500AdvancedAnalysis';
 import SP500WeeklySetupsPanel from './SP500WeeklySetupsPanel';
+import { sp500WebSocket } from '../services/WebSocketService';
 
 const SP500Dashboard = () => {
   const [stocks, setStocks] = useState([]);
@@ -16,11 +17,50 @@ const SP500Dashboard = () => {
   const [selectedStock, setSelectedStock] = useState(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [wsStatus, setWsStatus] = useState('disconnected');
+  const stocksRef = useRef([]);
+
+  // Keep ref in sync with state for WebSocket callbacks
+  useEffect(() => {
+    stocksRef.current = stocks;
+  }, [stocks]);
+
+  // WebSocket price update handler
+  const handleWsUpdate = useCallback((update) => {
+    setStocks(prev => {
+      const idx = prev.findIndex(s => s.symbol === update.symbol);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        price: update.price ?? updated[idx].price,
+        change: update.change ?? updated[idx].change,
+        changePercent: update.changePercent ?? updated[idx].changePercent,
+        volume: update.volume ?? updated[idx].volume,
+        high: update.high ?? updated[idx].high,
+        low: update.low ?? updated[idx].low,
+        timestamp: update.timestamp ? new Date(update.timestamp).toISOString() : updated[idx].timestamp,
+        sources: update.source ? [update.source] : updated[idx].sources
+      };
+      return updated;
+    });
+  }, []);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 2 * 60 * 1000); // Refresh every 2 minutes
-    return () => clearInterval(interval);
+    // No need for HTTP polling interval - WebSocket handles real-time updates
+    // Fallback: refresh every 5 minutes for market summary
+    const interval = setInterval(async () => {
+      try {
+        const summary = await SP500DataService.fetchMarketSummary();
+        setMarketSummary(summary);
+      } catch (e) { /* ignore */ }
+    }, 5 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      sp500WebSocket.disconnect();
+    };
   }, []);
 
   const loadData = async () => {
@@ -32,6 +72,19 @@ const SP500Dashboard = () => {
       ]);
       setStocks(stocksData);
       setMarketSummary(summary);
+
+      // Seed WebSocket cache with initial data and connect
+      sp500WebSocket.seedCache(stocksData);
+      const symbols = stocksData.map(s => s.symbol);
+
+      // Subscribe to all symbols for real-time updates
+      symbols.forEach(symbol => {
+        sp500WebSocket.subscribe(symbol, handleWsUpdate);
+      });
+
+      // Connect WebSocket (tries Polygon → TwelveData → HTTP polling)
+      sp500WebSocket.onStatusChange(setWsStatus);
+      sp500WebSocket.connect('sp500', symbols);
     } catch (error) {
       console.error('Error loading S&P 500 data:', error);
     } finally {
@@ -41,6 +94,7 @@ const SP500Dashboard = () => {
 
   const handleRefresh = () => {
     SP500DataService.clearCache();
+    sp500WebSocket.disconnect();
     loadData();
   };
 
@@ -100,7 +154,30 @@ const SP500Dashboard = () => {
               <BarChart3 className="w-8 h-8 text-purple-400" />
               S&P 500 Stock Dashboard
             </h1>
-            <p className="text-gray-400 mt-1">Real-time data with SeunBot intelligence</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-gray-400">Real-time data with SeunBot intelligence</p>
+              {wsStatus === 'connected' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  Live
+                </span>
+              )}
+              {wsStatus === 'reconnecting' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+                  <WifiOff className="w-3 h-3" />
+                  Reconnecting...
+                </span>
+              )}
+              {wsStatus === 'polling' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                  <Wifi className="w-3 h-3" />
+                  Polling (30s)
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={handleRefresh}

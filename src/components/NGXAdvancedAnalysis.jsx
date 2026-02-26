@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   Brain, TrendingUp, TrendingDown, Activity, Volume2, 
   BarChart3, Zap, Target, AlertTriangle, CheckCircle,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import EnhancedNGXWebScraper from '../services/EnhancedNGXWebScraper'
 import RealNGXDataService from '../services/RealNGXDataService'
+import { ngxWebSocket } from '../services/WebSocketService'
 
 const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
   const [activeTab, setActiveTab] = useState('smartMoney')
@@ -20,6 +21,29 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
   const [dataSource, setDataSource] = useState('Loading...')
 
   const timeframes = ['5M', '15M', '1H', '4H', '1D', '1W', '1M']
+
+  // Subscribe to WebSocket updates for the selected NGX stock
+  const handleWsUpdate = useCallback((update) => {
+    setRealTimeData(prev => ({
+      ...(prev || {}),
+      price: update.price ?? prev?.price,
+      change: update.change ?? prev?.change,
+      changePercent: update.changePercent ?? prev?.changePercent,
+      volume: update.volume ?? prev?.volume,
+      high: update.high ?? prev?.high,
+      low: update.low ?? prev?.low,
+      sources: update.source ? [update.source] : (prev?.sources || []),
+      isMock: false
+    }))
+    setDataSource(`✅ Live (${update.source || 'WebSocket'})`)
+  }, [])
+
+  useEffect(() => {
+    ngxWebSocket.subscribe(selectedStock, handleWsUpdate)
+    return () => {
+      ngxWebSocket.unsubscribe(selectedStock, handleWsUpdate)
+    }
+  }, [selectedStock, handleWsUpdate])
 
   useEffect(() => {
     if (selectedStock) {

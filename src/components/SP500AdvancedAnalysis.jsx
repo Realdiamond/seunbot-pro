@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   Brain, TrendingUp, TrendingDown, Activity, Volume2, 
   BarChart3, Zap, Target, AlertTriangle, CheckCircle,
@@ -7,6 +7,7 @@ import {
   Globe, Calendar, Moon, Sun, Compass, Orbit
 } from 'lucide-react'
 import SP500DataService from '../services/SP500DataService'
+import { sp500WebSocket } from '../services/WebSocketService'
 
 const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
   const [activeTab, setActiveTab] = useState('smartMoney')
@@ -15,6 +16,30 @@ const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => 
   const [loading, setLoading] = useState(false)
   const [realTimeData, setRealTimeData] = useState(null)
   const [dataSource, setDataSource] = useState('Loading...')
+
+  // Subscribe to WebSocket updates for the selected stock
+  const handleWsUpdate = useCallback((update) => {
+    setRealTimeData(prev => ({
+      ...(prev || {}),
+      price: update.price ?? prev?.price,
+      change: update.change ?? prev?.change,
+      changePercent: update.changePercent ?? prev?.changePercent,
+      volume: update.volume ?? prev?.volume,
+      high: update.high ?? prev?.high,
+      low: update.low ?? prev?.low,
+      sources: update.source ? [update.source] : (prev?.sources || []),
+      isMock: false
+    }))
+    setDataSource(`✅ Live (${update.source || 'WebSocket'})`)
+  }, [])
+
+  useEffect(() => {
+    // Subscribe to the selected stock via WebSocket
+    sp500WebSocket.subscribe(selectedStock, handleWsUpdate)
+    return () => {
+      sp500WebSocket.unsubscribe(selectedStock, handleWsUpdate)
+    }
+  }, [selectedStock, handleWsUpdate])
 
   const timeframes = ['5M', '15M', '1H', '4H', '1D', '1W', '1M']
 

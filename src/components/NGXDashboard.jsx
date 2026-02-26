@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   MapPin, Building, Fuel, Package, Phone, Factory, Shield, 
   TrendingUp, TrendingDown, Volume2, BarChart3, RefreshCw,
   Search, Filter, Star, Eye, Download, Share2, Bell,
-  Globe, Calendar, Clock, AlertCircle, CheckCircle, Info, Layers
+  Globe, Calendar, Clock, AlertCircle, CheckCircle, Info, Layers,
+  Wifi, WifiOff
 } from 'lucide-react'
 import NGXAnalysis from './NGXAnalysis'
 import AIMarketSummary from './AIMarketSummary'
 import RealNGXDataService from '../services/RealNGXDataService'
+import { ngxWebSocket } from '../services/WebSocketService'
 
 const NGXDashboard = () => {
   const [selectedStock, setSelectedStock] = useState('GTCO')
@@ -20,20 +22,47 @@ const NGXDashboard = () => {
   const [viewMode, setViewMode] = useState('analysis')
   const [watchlist, setWatchlist] = useState(['GTCO', 'DANGCEM', 'MTNN', 'ZENITHBANK'])
   const [lastUpdate, setLastUpdate] = useState(null)
+  const [wsStatus, setWsStatus] = useState('disconnected')
 
   const sectors = ['All', 'Banking', 'Oil & Gas', 'Consumer Goods', 'Telecommunications', 'Industrial Goods', 'Insurance', 'Conglomerates', 'Healthcare', 'ETF']
   const types = ['All', 'Stock', 'ETF']
 
+  // WebSocket price update handler
+  const handleWsUpdate = useCallback((update) => {
+    setAllStocks(prev => {
+      const idx = prev.findIndex(s => s.symbol === update.symbol)
+      if (idx === -1) return prev
+      const updated = [...prev]
+      updated[idx] = {
+        ...updated[idx],
+        price: update.price ?? updated[idx].price,
+        change: update.change ?? updated[idx].change,
+        changePercent: update.changePercent ?? updated[idx].changePercent,
+        volume: update.volume ?? updated[idx].volume,
+        high: update.high ?? updated[idx].high,
+        low: update.low ?? updated[idx].low,
+        timestamp: update.timestamp ? new Date(update.timestamp).toISOString() : updated[idx].timestamp,
+        sources: update.source ? [update.source] : updated[idx].sources
+      }
+      return updated
+    })
+  }, [])
+
   useEffect(() => {
     loadNGXData()
     
-    // Set up auto-refresh every 5 minutes
-    const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing NGX data...')
-      loadNGXData()
+    // Refresh market summary every 5 minutes
+    const interval = setInterval(async () => {
+      try {
+        const summary = await RealNGXDataService.fetchMarketSummary()
+        setMarketSummary(summary)
+      } catch (e) { /* ignore */ }
     }, 5 * 60 * 1000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      ngxWebSocket.disconnect()
+    }
   }, [])
 
   const loadNGXData = async () => {
@@ -47,15 +76,19 @@ const NGXDashboard = () => {
       ])
 
       console.log(`✅ Loaded ${stocks.length} securities from sources:`, summary.sources)
-      console.log('📈 Market Summary:', summary)
-      
-      if (summary.isMock) {
-        console.warn('⚠️ Using mock data - all sources may have failed')
-      }
 
       setAllStocks(stocks)
       setMarketSummary(summary)
       setLastUpdate(new Date())
+
+      // Seed WebSocket cache and connect
+      ngxWebSocket.seedCache(stocks)
+      const symbols = stocks.map(s => s.symbol)
+      symbols.forEach(symbol => {
+        ngxWebSocket.subscribe(symbol, handleWsUpdate)
+      })
+      ngxWebSocket.onStatusChange(setWsStatus)
+      ngxWebSocket.connect('ngx', symbols)
     } catch (error) {
       console.error('❌ Error loading NGX data:', error)
     } finally {
@@ -136,9 +169,32 @@ const NGXDashboard = () => {
             <MapPin className="h-8 w-8 text-green-500" />
             <div>
               <h1 className="text-3xl font-bold text-white">Nigerian Stock Exchange</h1>
-              <p className="text-gray-400">
-                {stockCount} Stocks • {etfCount} ETFs • {marketSummary?.sources?.length || 0} Data Sources
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-gray-400">
+                  {stockCount} Stocks • {etfCount} ETFs • {marketSummary?.sources?.length || 0} Data Sources
+                </p>
+                {wsStatus === 'connected' && (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    Live
+                  </span>
+                )}
+                {wsStatus === 'reconnecting' && (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+                    <WifiOff className="w-3 h-3" />
+                    Reconnecting...
+                  </span>
+                )}
+                {wsStatus === 'polling' && (
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                    <Wifi className="w-3 h-3" />
+                    Polling (30s)
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           
@@ -164,7 +220,7 @@ const NGXDashboard = () => {
             )}
             
             <button
-              onClick={loadNGXData}
+              onClick={() => { ngxWebSocket.disconnect(); loadNGXData(); }}
               className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-400 transition-colors"
               title="Refresh data"
             >
