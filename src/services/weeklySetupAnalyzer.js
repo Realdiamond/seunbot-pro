@@ -6,6 +6,17 @@ class WeeklySetupAnalyzer {
     this.cacheTimeout = 5 * 60 * 1000 // 5 minutes cache
   }
 
+  // Deterministic hash for symbol
+  hashSymbol(symbol) {
+    let hash = 0
+    for (let i = 0; i < symbol.length; i++) {
+      const char = symbol.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash
+    }
+    return Math.abs(hash)
+  }
+
   async analyzeWeeklySetups() {
     try {
       console.log('🔍 Starting weekly setup analysis with real Binance data...')
@@ -69,10 +80,10 @@ class WeeklySetupAnalyzer {
     try {
       const symbol = pair.symbol
       const currentPrice = parseFloat(pair.price)
-      const change24h = parseFloat(pair.change)
+      const change24h = parseFloat(pair.priceChangePercent || pair.change || 0)
       const volume24h = parseFloat(pair.quoteVolume)
-      const high24h = parseFloat(pair.high)
-      const low24h = parseFloat(pair.low)
+      const high24h = parseFloat(pair.highPrice || pair.high || currentPrice * 1.02)
+      const low24h = parseFloat(pair.lowPrice || pair.low || currentPrice * 0.98)
       
       // Skip pairs with insufficient data
       if (!currentPrice || currentPrice <= 0 || !volume24h) return null
@@ -141,11 +152,11 @@ class WeeklySetupAnalyzer {
   }
 
   calculateTechnicalScore(pair) {
-    const change24h = parseFloat(pair.change || 0)
+    const change24h = parseFloat(pair.priceChangePercent || pair.change || 0)
     const volume = parseFloat(pair.quoteVolume || 0)
     const price = parseFloat(pair.price || 0)
-    const high = parseFloat(pair.high || price)
-    const low = parseFloat(pair.low || price)
+    const high = parseFloat(pair.highPrice || pair.high || price)
+    const low = parseFloat(pair.lowPrice || pair.low || price)
     
     let score = 50 // Base score
     
@@ -169,15 +180,16 @@ class WeeklySetupAnalyzer {
       else score += 5 // Mid-range
     }
     
-    // Add randomness for demonstration (10 points max)
-    score += Math.random() * 10
+    // Deterministic bonus based on symbol hash (replaces Math.random)
+    const hash = this.hashSymbol(pair.symbol || 'UNKNOWN')
+    score += (hash % 10) // 0-9 deterministic bonus
     
     return Math.max(60, Math.min(95, score))
   }
 
   calculateProbability(pair, technicalScore) {
     const volume = parseFloat(pair.quoteVolume || 0)
-    const change24h = parseFloat(pair.change || 0)
+    const change24h = parseFloat(pair.priceChangePercent || pair.change || 0)
     
     let probability = technicalScore * 0.8 // Technical score is 80% of probability
     
@@ -194,15 +206,14 @@ class WeeklySetupAnalyzer {
   }
 
   identifySetupType(pair) {
-    const change24h = parseFloat(pair.change || 0)
+    const change24h = parseFloat(pair.priceChangePercent || pair.change || 0)
     const volume = parseFloat(pair.quoteVolume || 0)
     const price = parseFloat(pair.price || 0)
-    const high = parseFloat(pair.high || price)
-    const low = parseFloat(pair.low || price)
+    const high = parseFloat(pair.highPrice || pair.high || price)
+    const low = parseFloat(pair.lowPrice || pair.low || price)
     
     const pricePosition = high > low ? (price - low) / (high - low) : 0.5
     
-    // Setup type logic based on price action and volume
     if (change24h > 5 && volume > 50000000) {
       return 'Bullish Breakout'
     } else if (change24h > 2 && pricePosition > 0.7) {
@@ -222,7 +233,7 @@ class WeeklySetupAnalyzer {
 
   generateSignals(pair, setupType, technicalScore) {
     const signals = []
-    const change24h = parseFloat(pair.change || 0)
+    const change24h = parseFloat(pair.priceChangePercent || pair.change || 0)
     const volume = parseFloat(pair.quoteVolume || 0)
     
     // Volume signals
@@ -290,7 +301,7 @@ class WeeklySetupAnalyzer {
 
   calculateFundamentalScore(pair) {
     const volume = parseFloat(pair.quoteVolume || 0)
-    const change24h = parseFloat(pair.change || 0)
+    const change24h = parseFloat(pair.priceChangePercent || pair.change || 0)
     
     let score = 60 // Higher base score
     
@@ -306,8 +317,9 @@ class WeeklySetupAnalyzer {
     else if (change24h > 2) score += 5
     else if (change24h > 0) score += 3
     
-    // Add some randomness for variety
-    score += Math.random() * 10
+    // Deterministic bonus based on symbol hash (replaces Math.random)
+    const hash = this.hashSymbol(pair.symbol || 'UNKNOWN')
+    score += (hash % 10) // 0-9 deterministic bonus
     
     return Math.max(65, Math.min(95, Math.round(score)))
   }
@@ -329,15 +341,15 @@ class WeeklySetupAnalyzer {
     )
     
     const gainers = allPairs.filter(pair => 
-      parseFloat(pair.change || 0) > 0
+      parseFloat(pair.priceChangePercent || pair.change || 0) > 0
     ).length
     
     const losers = allPairs.filter(pair => 
-      parseFloat(pair.change || 0) < 0
+      parseFloat(pair.priceChangePercent || pair.change || 0) < 0
     ).length
     
     const avgChange = allPairs.reduce((sum, pair) => 
-      sum + parseFloat(pair.change || 0), 0
+      sum + parseFloat(pair.priceChangePercent || pair.change || 0), 0
     ) / allPairs.length
     
     return {
@@ -350,7 +362,7 @@ class WeeklySetupAnalyzer {
   }
 
   generateFallbackData() {
-    console.log('📝 Generating fallback trading setups...')
+    console.log('📝 Generating fixed fallback trading setups...')
     
     const fallbackSetups = [
       {

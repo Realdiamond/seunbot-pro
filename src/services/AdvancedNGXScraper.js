@@ -70,6 +70,17 @@ class AdvancedNGXScraper {
     };
   }
 
+  // Deterministic hash for symbol
+  hashSymbol(symbol) {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) {
+      const char = symbol.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
   // Main data fetching orchestrator
   async scrapeAllSources() {
     // Check cache first
@@ -120,7 +131,6 @@ class AdvancedNGXScraper {
     try {
       console.log('📊 Fetching from Investing.com...');
       
-      // Try direct API endpoint
       const response = await axios.get('https://www.investing.com/equities/nigeria', {
         timeout: 8000,
         headers: {
@@ -149,9 +159,7 @@ class AdvancedNGXScraper {
   parseInvestingData(data) {
     const stocks = [];
     try {
-      // Parse Investing.com data structure
       if (typeof data === 'string') {
-        // Extract stock data from HTML
         const priceRegex = /"symbol":"([A-Z]+)".*?"last":([\d.]+).*?"chg":([-\d.]+).*?"chgPct":([-\d.]+)/g;
         let match;
         while ((match = priceRegex.exec(data)) !== null) {
@@ -186,11 +194,11 @@ class AdvancedNGXScraper {
 
       if (response.data && response.data.data) {
         const stocks = response.data.data.map(item => {
-          const symbol = item.s.split(':')[1]; // Extract symbol from "NGX:SYMBOL"
+          const symbol = item.s.split(':')[1];
           return this.createStockObject(
             symbol,
-            item.d[1], // close price
-            item.d[2]  // change percent
+            item.d[1],
+            item.d[2]
           );
         });
 
@@ -292,11 +300,10 @@ class AdvancedNGXScraper {
     return stocks;
   }
 
-  // Alpha Vantage API (requires API key, will use fallback)
+  // Alpha Vantage API
   async fetchAlphaVantage() {
     try {
       console.log('📊 Fetching from Alpha Vantage...');
-      // Alpha Vantage requires API key - skip for now
       return null;
     } catch (error) {
       console.error('❌ Alpha Vantage fetch failed:', error.message);
@@ -331,7 +338,6 @@ class AdvancedNGXScraper {
   async fetchMarketWatch() {
     try {
       console.log('📊 Fetching from MarketWatch...');
-      // MarketWatch API endpoint
       return null;
     } catch (error) {
       console.error('❌ MarketWatch fetch failed:', error.message);
@@ -421,7 +427,6 @@ class AdvancedNGXScraper {
   async fetchCORSProxy() {
     try {
       console.log('📊 Fetching via CORS proxy...');
-      // Additional proxy attempt
       return null;
     } catch (error) {
       console.error('❌ CORS proxy fetch failed:', error.message);
@@ -459,17 +464,20 @@ class AdvancedNGXScraper {
     return stocks;
   }
 
-  // Create standardized stock object
+  // Create standardized stock object - deterministic (no Math.random)
   createStockObject(symbol, price, changePercent) {
     const change = (price * changePercent) / 100;
     const knownStock = this.knownStocks[symbol.toUpperCase()];
+    const hash = this.hashSymbol(symbol.toUpperCase());
+    // Deterministic volume based on symbol hash
+    const volume = 1000000 + (hash % 10000000);
     
     return {
       symbol: symbol.toUpperCase(),
       price: price,
       change: change,
       changePercent: changePercent,
-      volume: Math.floor(1000000 + Math.random() * 10000000),
+      volume: volume,
       high: price * 1.02,
       low: price * 0.98,
       open: price - change,
@@ -526,22 +534,25 @@ class AdvancedNGXScraper {
     };
   }
 
-  // Generate realistic fallback data
+  // Generate realistic fallback data - deterministic (no Math.random)
   generateRealisticData() {
     console.warn('⚠️ Using realistic fallback data based on known NGX stocks');
     
     const stocks = Object.entries(this.knownStocks).map(([symbol, data]) => {
-      const volatility = (Math.random() - 0.5) * 6; // -3% to +3%
-      const price = data.price * (1 + volatility / 100);
+      // Deterministic variation based on symbol hash
+      const hash = this.hashSymbol(symbol);
+      const variation = ((hash % 600) - 300) / 100; // -3% to +3% deterministic
+      const price = data.price * (1 + variation / 100);
       const change = price - data.price;
       const changePercent = (change / data.price) * 100;
+      const volume = 1000000 + (hash % 10000000);
       
       return {
         symbol: symbol,
         price: price,
         change: change,
         changePercent: changePercent,
-        volume: Math.floor(1000000 + Math.random() * 10000000),
+        volume: volume,
         high: price * 1.02,
         low: price * 0.98,
         open: data.price,
@@ -595,9 +606,15 @@ class AdvancedNGXScraper {
       console.warn(`Stock ${symbol} not found, generating realistic data`);
       const knownStock = this.knownStocks[symbol.toUpperCase()];
       if (knownStock) {
-        return this.createStockObject(symbol, knownStock.price, (Math.random() - 0.5) * 4);
+        const hash = this.hashSymbol(symbol.toUpperCase());
+        const variation = ((hash % 400) - 200) / 100; // deterministic -2% to +2%
+        return this.createStockObject(symbol, knownStock.price * (1 + variation / 100), variation);
       }
-      return this.createStockObject(symbol, 50 + Math.random() * 100, (Math.random() - 0.5) * 4);
+      // Unknown stock - use deterministic base price
+      const hash = this.hashSymbol(symbol.toUpperCase());
+      const basePrice = 50 + (hash % 100);
+      const variation = ((hash % 400) - 200) / 100;
+      return this.createStockObject(symbol, basePrice, variation);
     }
     
     return stock;

@@ -6,6 +6,17 @@ class EnhancedNGXWebScraper {
     this.scraper = AdvancedNGXScraper;
   }
 
+  // Deterministic hash for symbol
+  hashSymbol(symbol) {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) {
+      const char = symbol.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
   // Scan for weekly high probability setups with REAL scraped data
   async scanWeeklyHighProbabilitySetups() {
     try {
@@ -135,14 +146,16 @@ class EnhancedNGXWebScraper {
 
     // Price action analysis
     const priceRange = stock.high - stock.low;
-    const pricePosition = (price - stock.low) / priceRange;
-    
-    if (setupType.includes('Bullish') && pricePosition > 0.8) {
-      probability += 3;
-      signals.push('Price near session high');
-    } else if (setupType.includes('Bearish') && pricePosition < 0.2) {
-      probability += 3;
-      signals.push('Price near session low');
+    if (priceRange > 0) {
+      const pricePosition = (price - stock.low) / priceRange;
+      
+      if (setupType.includes('Bullish') && pricePosition > 0.8) {
+        probability += 3;
+        signals.push('Price near session high');
+      } else if (setupType.includes('Bearish') && pricePosition < 0.2) {
+        probability += 3;
+        signals.push('Price near session low');
+      }
     }
 
     // Cap probability at 95
@@ -200,84 +213,104 @@ class EnhancedNGXWebScraper {
   }
 
   generateFallbackSetups() {
-    console.warn('⚠️ Using fallback mock data for setups');
+    console.warn('⚠️ Using fixed fallback data for setups');
     
-    const topStocks = [
-      'DANGCEM', 'MTNN', 'BUACEMENT', 'GTCO', 'ZENITHBANK',
-      'STANBIC', 'SEPLAT', 'AIRTELAFRI', 'BUAFOODS', 'NESTLE',
-      'FBNH', 'UBA', 'ACCESSCORP', 'TRANSCORP', 'OANDO'
+    // Fixed deterministic data - no Math.random
+    const fixedSetups = [
+      { symbol: 'DANGCEM', setupType: 'Bullish Breakout', probability: 88, price: 285.50, volume: 4500000, change: 3.5, changePercent: 1.2 },
+      { symbol: 'MTNN', setupType: 'Ascending Triangle', probability: 82, price: 195.00, volume: 5500000, change: 2.8, changePercent: 1.4 },
+      { symbol: 'BUACEMENT', setupType: 'Bull Flag', probability: 80, price: 95.40, volume: 3800000, change: 1.9, changePercent: 2.0 },
+      { symbol: 'GTCO', setupType: 'Range Consolidation', probability: 78, price: 25.50, volume: 15000000, change: 0.3, changePercent: 1.2 },
+      { symbol: 'ZENITHBANK', setupType: 'Bullish Breakout', probability: 77, price: 22.80, volume: 12000000, change: 0.5, changePercent: 2.2 },
+      { symbol: 'STANBIC', setupType: 'Coiling Pattern', probability: 76, price: 45.20, volume: 3200000, change: -0.2, changePercent: -0.4 },
+      { symbol: 'SEPLAT', setupType: 'Bullish Breakout', probability: 85, price: 850.00, volume: 2500000, change: 25.0, changePercent: 3.0 },
+      { symbol: 'AIRTELAFRI', setupType: 'Ascending Triangle', probability: 75, price: 1250.00, volume: 800000, change: 15.0, changePercent: 1.2 },
+      { symbol: 'BUAFOODS', setupType: 'Range Consolidation', probability: 74, price: 180.50, volume: 2100000, change: 1.5, changePercent: 0.8 },
+      { symbol: 'NESTLE', setupType: 'Descending Triangle', probability: 73, price: 1450.00, volume: 1200000, change: -15.0, changePercent: -1.0 },
+      { symbol: 'FBNH', setupType: 'Bullish Breakout', probability: 72, price: 14.20, volume: 6800000, change: 0.4, changePercent: 2.9 },
+      { symbol: 'UBA', setupType: 'Coiling Pattern', probability: 71, price: 8.45, volume: 8500000, change: 0.05, changePercent: 0.6 },
+      { symbol: 'ACCESSCORP', setupType: 'Bearish Breakdown', probability: 70, price: 12.30, volume: 7200000, change: -0.3, changePercent: -2.4 },
+      { symbol: 'TRANSCORP', setupType: 'Bullish Breakout', probability: 83, price: 3.85, volume: 11000000, change: 0.15, changePercent: 4.1 },
+      { symbol: 'OANDO', setupType: 'Bullish Breakout', probability: 81, price: 6.20, volume: 9500000, change: 0.3, changePercent: 5.1 }
     ];
     
-    const setups = topStocks.map((symbol, index) => {
-      const basePrice = 100 + Math.random() * 100;
-      const probability = 70 + Math.floor(Math.random() * 25);
-      const setupTypes = [
-        'Bullish Breakout',
-        'Ascending Triangle',
-        'Bull Flag',
-        'Range Consolidation',
-        'Descending Triangle',
-        'Coiling Pattern'
-      ];
-      
+    const setups = fixedSetups.map(s => {
+      const targetPrice = s.setupType.includes('Bullish') || s.setupType.includes('Ascending')
+        ? s.price * (1.08 + (s.probability - 70) * 0.002)
+        : s.setupType.includes('Bearish') || s.setupType.includes('Descending')
+        ? s.price * (0.92 - (s.probability - 70) * 0.002)
+        : s.price * 1.05;
+      const stopLoss = s.setupType.includes('Bullish') || s.setupType.includes('Ascending')
+        ? s.price * 0.97
+        : s.setupType.includes('Bearish') || s.setupType.includes('Descending')
+        ? s.price * 1.03
+        : s.price * 0.98;
+
       return {
-        symbol,
-        setupType: setupTypes[index % setupTypes.length],
-        probability,
-        confidence: probability > 85 ? 'Very High' : probability > 75 ? 'High' : 'Medium',
-        entryPrice: basePrice,
-        targetPrice: basePrice * (1.05 + Math.random() * 0.05),
-        stopLoss: basePrice * (0.97 - Math.random() * 0.02),
-        riskReward: (2 + Math.random()).toFixed(2),
-        sector: this.getSector(symbol),
+        symbol: s.symbol,
+        setupType: s.setupType,
+        probability: s.probability,
+        confidence: s.probability > 85 ? 'Very High' : s.probability > 75 ? 'High' : 'Medium',
+        entryPrice: s.price,
+        targetPrice,
+        stopLoss,
+        riskReward: Math.abs((targetPrice - s.price) / (s.price - stopLoss)).toFixed(2),
+        sector: this.getSector(s.symbol),
         timeframe: '1W',
-        signals: ['Mock data - Real scraping in progress'],
-        volume: Math.floor(1000000 + Math.random() * 10000000),
-        change: (Math.random() - 0.5) * 10,
-        changePercent: (Math.random() - 0.5) * 5,
-        sources: ['Mock Generator'],
+        signals: ['Fixed fallback data - Real scraping in progress'],
+        volume: s.volume,
+        change: s.change,
+        changePercent: s.changePercent,
+        sources: ['Fixed Fallback'],
         isMock: true
       };
     });
 
     return {
       setups,
-      totalScanned: topStocks.length,
+      totalScanned: fixedSetups.length,
       highProbabilityCount: setups.length,
       scanTime: new Date().toISOString(),
-      dataSource: 'Mock Data (Fallback)',
+      dataSource: 'Fixed Fallback Data',
       marketSummary: {
         index: 100000,
         indexChange: 500,
         indexChangePercent: 0.5,
-        advancers: 45,
-        decliners: 32,
-        unchanged: 8
+        advancers: 9,
+        decliners: 4,
+        unchanged: 2
       },
-      sources: ['Mock Generator']
+      sources: ['Fixed Fallback']
     };
   }
 
-  // Fetch historical data for a stock
+  // Fetch historical data for a stock - deterministic (no Math.random)
   async fetchHistoricalData(symbol, period = '1M') {
     try {
       const data = await this.scraper.getStock(symbol);
       
-      // Generate historical points (simplified)
+      // Generate deterministic historical points
       const points = [];
       const basePrice = data.price;
+      const hash = this.hashSymbol(symbol);
       
       for (let i = 30; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         
+        // Deterministic variation based on day index and symbol hash
+        const dayHash = this.hashSymbol(symbol + i);
+        const variation = ((dayHash % 200) - 100) / 2000; // -5% to +5%
+        const dayPrice = basePrice * (1 + variation);
+        const dayVariation = (dayHash % 50) / 1000; // 0-5% intraday range
+        
         points.push({
           date: date.toISOString().split('T')[0],
-          open: basePrice * (0.95 + Math.random() * 0.1),
-          high: basePrice * (1.0 + Math.random() * 0.05),
-          low: basePrice * (0.95 - Math.random() * 0.05),
-          close: basePrice * (0.95 + Math.random() * 0.1),
-          volume: Math.floor(1000000 + Math.random() * 5000000)
+          open: dayPrice * (1 - dayVariation / 2),
+          high: dayPrice * (1 + dayVariation),
+          low: dayPrice * (1 - dayVariation),
+          close: dayPrice * (1 + dayVariation / 2),
+          volume: 1000000 + (dayHash % 5000000)
         });
       }
       

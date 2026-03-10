@@ -5,10 +5,13 @@ import {
   Menu, X, Home, Activity, Brain, Zap, DollarSign
 } from 'lucide-react'
 import TradingDashboard from './components/TradingDashboard'
+import SeunBotAnalysis from './components/SeunBotAnalysis'
 import NGXDashboard from './components/NGXDashboard'
 import NGXAdvancedAnalysis from './components/NGXAdvancedAnalysis'
 import NGXWeeklySetupsPanel from './components/NGXWeeklySetupsPanel'
 import SP500Dashboard from './components/SP500Dashboard'
+import SP500AdvancedAnalysis from './components/SP500AdvancedAnalysis'
+import SP500WeeklySetupsPanel from './components/SP500WeeklySetupsPanel'
 import './App.css'
 
 function App() {
@@ -157,6 +160,14 @@ function App() {
                     <Brain className="h-5 w-5" />
                     <span>Stock Analysis</span>
                   </Link>
+                  <Link
+                    to="/sp500-setups"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  >
+                    <Target className="h-5 w-5" />
+                    <span>Weekly Setups</span>
+                  </Link>
                 </>
               )}
             </nav>
@@ -202,7 +213,7 @@ function App() {
             <Routes>
               {/* Crypto Routes */}
               <Route path="/" element={<TradingDashboard />} />
-              <Route path="/crypto-analysis" element={<TradingDashboard />} />
+              <Route path="/crypto-analysis" element={<SeunBotAnalysis />} />
               
               {/* NGX Routes */}
               <Route path="/ngx" element={<NGXDashboard />} />
@@ -216,7 +227,8 @@ function App() {
 
               {/* S&P 500 Routes */}
               <Route path="/sp500" element={<SP500Dashboard />} />
-              <Route path="/sp500-analysis" element={<SP500Dashboard />} />
+              <Route path="/sp500-analysis" element={<SP500AdvancedAnalysis />} />
+              <Route path="/sp500-setups" element={<SP500WeeklySetupsPanel />} />
             </Routes>
           </div>
         </div>

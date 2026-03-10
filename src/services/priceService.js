@@ -74,7 +74,6 @@ class PriceService {
         range: [0, symbols.length]
       }
 
-      // Note: This is a simplified approach. In production, you'd need proper CORS handling
       const response = await axios.post(`${this.tradingViewBaseUrl}/crypto/scan`, payload, {
         headers: {
           'Content-Type': 'application/json',
@@ -141,32 +140,46 @@ class PriceService {
     return null
   }
 
-  // Fallback prices when APIs fail
-  getFallbackPrices(symbols) {
-    const basePrices = {
-      'BTCUSDT': 43250.50,
-      'ETHUSDT': 2680.75,
-      'BNBUSDT': 315.20,
-      'ADAUSDT': 0.4850,
-      'XRPUSDT': 0.6125,
-      'SOLUSDT': 98.45,
-      'DOGEUSDT': 0.0785,
-      'MATICUSDT': 0.8950
+  // Deterministic hash for symbol
+  hashSymbol(symbol) {
+    let hash = 0
+    for (let i = 0; i < symbol.length; i++) {
+      const char = symbol.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash
     }
-    
-    return symbols.map(symbol => ({
-      symbol,
-      price: basePrices[symbol] || 100,
-      change: (Math.random() - 0.5) * 10,
-      volume: Math.random() * 1000000,
-      high: (basePrices[symbol] || 100) * 1.05,
-      low: (basePrices[symbol] || 100) * 0.95,
-      openPrice: basePrices[symbol] || 100,
-      timestamp: Date.now()
-    }))
+    return Math.abs(hash)
   }
 
-  // Generate fallback chart data
+  // Fallback prices when APIs fail - FIXED deterministic values (no Math.random)
+  getFallbackPrices(symbols) {
+    const basePrices = {
+      'BTCUSDT': { price: 43250.50, change: 2.5 },
+      'ETHUSDT': { price: 2680.75, change: 1.8 },
+      'BNBUSDT': { price: 315.20, change: 3.2 },
+      'ADAUSDT': { price: 0.4850, change: -1.2 },
+      'XRPUSDT': { price: 0.6125, change: -0.8 },
+      'SOLUSDT': { price: 98.45, change: -2.1 },
+      'DOGEUSDT': { price: 0.0785, change: 4.2 },
+      'MATICUSDT': { price: 0.8950, change: 0.5 }
+    }
+    
+    return symbols.map(symbol => {
+      const base = basePrices[symbol] || { price: 100, change: 0.5 }
+      return {
+        symbol,
+        price: base.price,
+        change: base.change,
+        volume: 5000000 + this.hashSymbol(symbol) % 10000000,
+        high: base.price * 1.03,
+        low: base.price * 0.97,
+        openPrice: base.price / (1 + base.change / 100),
+        timestamp: Date.now()
+      }
+    })
+  }
+
+  // Generate fallback chart data - deterministic (no Math.random)
   generateFallbackChartData(symbol) {
     const basePrices = {
       'BTCUSDT': 43250.50,
@@ -187,19 +200,22 @@ class PriceService {
       const date = new Date()
       date.setDate(date.getDate() - (99 - i))
       
-      const volatility = 0.02
+      // Deterministic price movement using sine wave + symbol hash
+      const hash = this.hashSymbol(symbol + i)
       const trend = Math.sin(i / 20) * 0.001
-      const randomChange = (Math.random() - 0.5) * volatility + trend
+      const deterministicChange = ((hash % 200) - 100) / 10000 + trend
       
-      currentPrice = currentPrice * (1 + randomChange)
+      currentPrice = currentPrice * (1 + deterministicChange)
+      
+      const dayVariation = (hash % 100) / 10000
       
       data.push({
         date: date.toISOString().split('T')[0],
-        open: i === 0 ? basePrice : data[i-1]?.close || currentPrice,
-        high: currentPrice * (1 + Math.random() * 0.01),
-        low: currentPrice * (1 - Math.random() * 0.01),
+        open: i === 0 ? basePrice : data[i - 1]?.close || currentPrice,
+        high: currentPrice * (1 + dayVariation),
+        low: currentPrice * (1 - dayVariation),
         close: currentPrice,
-        volume: Math.floor(Math.random() * 1000000) + 100000
+        volume: 500000 + (hash % 1000000)
       })
     }
     
@@ -209,19 +225,39 @@ class PriceService {
   // Fetch comprehensive market data
   async getMarketData() {
     try {
-      // Try to get real data from multiple sources
+      // Try to get real data from Binance
       const binanceData = await this.fetchBinancePrices()
       
-      // Add market cap and additional metrics
-      const enhancedData = await Promise.all(binanceData.map(async (coin) => {
-        // Simulate additional market data that would come from CoinGecko or similar
-        return {
-          ...coin,
-          marketCap: coin.price * (Math.random() * 1000000000 + 100000000),
-          rank: Math.floor(Math.random() * 100) + 1,
-          circulatingSupply: Math.random() * 1000000000,
-          totalSupply: Math.random() * 1000000000
-        }
+      // Known market cap estimates (deterministic)
+      const marketCapEstimates = {
+        'BTCUSDT': 850000000000,
+        'ETHUSDT': 320000000000,
+        'BNBUSDT': 48000000000,
+        'ADAUSDT': 17000000000,
+        'XRPUSDT': 34000000000,
+        'SOLUSDT': 42000000000,
+        'DOGEUSDT': 11000000000,
+        'MATICUSDT': 8000000000
+      }
+
+      const knownRanks = {
+        'BTCUSDT': 1, 'ETHUSDT': 2, 'BNBUSDT': 4, 'XRPUSDT': 5,
+        'SOLUSDT': 6, 'ADAUSDT': 8, 'DOGEUSDT': 9, 'MATICUSDT': 12
+      }
+
+      const knownSupply = {
+        'BTCUSDT': 19600000, 'ETHUSDT': 120000000, 'BNBUSDT': 153000000,
+        'ADAUSDT': 35000000000, 'XRPUSDT': 54000000000, 'SOLUSDT': 430000000,
+        'DOGEUSDT': 142000000000, 'MATICUSDT': 9300000000
+      }
+
+      // Add deterministic market data
+      const enhancedData = binanceData.map(coin => ({
+        ...coin,
+        marketCap: marketCapEstimates[coin.symbol] || coin.price * 100000000,
+        rank: knownRanks[coin.symbol] || 50,
+        circulatingSupply: knownSupply[coin.symbol] || 100000000,
+        totalSupply: (knownSupply[coin.symbol] || 100000000) * 1.1
       }))
       
       return enhancedData
