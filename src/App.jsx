@@ -1,31 +1,53 @@
-import React, { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
-import { 
-  BarChart3, TrendingUp, Globe, MapPin, Target, 
-  Menu, X, Home, Activity, Brain, Zap, DollarSign
+import React, { lazy, Suspense, useMemo, useState } from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
+import {
+  BarChart3, Globe, MapPin, Target,
+  Menu, X, Home, Brain, DollarSign
 } from 'lucide-react'
-import TradingDashboard from './components/TradingDashboard'
-import SeunBotAnalysis from './components/SeunBotAnalysis'
 import NGXDashboard from './components/NGXDashboard'
 import NGXAdvancedAnalysis from './components/NGXAdvancedAnalysis'
 import NGXWeeklySetupsPanel from './components/NGXWeeklySetupsPanel'
-import SP500Dashboard from './components/SP500Dashboard'
-import SP500AdvancedAnalysis from './components/SP500AdvancedAnalysis'
-import SP500WeeklySetupsPanel from './components/SP500WeeklySetupsPanel'
 import './App.css'
 
+const TradingDashboard = lazy(() => import('./components/TradingDashboard'))
+const SeunBotAnalysis = lazy(() => import('./components/SeunBotAnalysis'))
+const SP500Dashboard = lazy(() => import('./components/SP500Dashboard'))
+const SP500AdvancedAnalysis = lazy(() => import('./components/SP500AdvancedAnalysis'))
+const SP500WeeklySetupsPanel = lazy(() => import('./components/SP500WeeklySetupsPanel'))
+
 function App() {
+  const enabledMarkets = useMemo(() => {
+    const raw = import.meta.env.VITE_ENABLED_MARKETS || 'ngx'
+    const requested = raw
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+
+    const valid = requested.filter((value) => ['crypto', 'ngx', 'sp500'].includes(value))
+    return valid.length > 0 ? Array.from(new Set(valid)) : ['ngx']
+  }, [])
+
+  const hasCrypto = enabledMarkets.includes('crypto')
+  const hasNgx = enabledMarkets.includes('ngx')
+  const hasSp500 = enabledMarkets.includes('sp500')
+  const defaultMarket = hasNgx ? 'ngx' : enabledMarkets[0]
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [currentMarket, setCurrentMarket] = useState('crypto') // 'crypto', 'ngx', or 'sp500'
+  const [currentMarket, setCurrentMarket] = useState(defaultMarket)
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
   }
 
   const switchMarket = (market) => {
+    if (!enabledMarkets.includes(market)) return
     setCurrentMarket(market)
     setSidebarOpen(false)
   }
+
+  const activeMarket = enabledMarkets.includes(currentMarket) ? currentMarket : defaultMarket
+  const marketSelectorCols = enabledMarkets.length >= 3 ? 'grid-cols-3' : enabledMarkets.length === 2 ? 'grid-cols-2' : 'grid-cols-1'
+  const fallbackRoute = hasNgx ? '/ngx' : hasCrypto ? '/' : '/sp500'
 
   return (
     <Router>
@@ -57,11 +79,12 @@ function App() {
             {/* Market Selector */}
             <div className="p-4 border-b border-gray-700">
               <div className="text-xs text-gray-400 mb-2">Select Market</div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid ${marketSelectorCols} gap-2`}>
+                {hasCrypto && (
                 <button
                   onClick={() => switchMarket('crypto')}
                   className={`p-3 rounded-lg text-xs font-medium transition-colors ${
-                    currentMarket === 'crypto'
+                    activeMarket === 'crypto'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}
@@ -69,10 +92,12 @@ function App() {
                   <Globe className="h-4 w-4 mx-auto mb-1" />
                   Crypto
                 </button>
+                )}
+                {hasNgx && (
                 <button
                   onClick={() => switchMarket('ngx')}
                   className={`p-3 rounded-lg text-xs font-medium transition-colors ${
-                    currentMarket === 'ngx'
+                    activeMarket === 'ngx'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}
@@ -80,10 +105,12 @@ function App() {
                   <MapPin className="h-4 w-4 mx-auto mb-1" />
                   NGX
                 </button>
+                )}
+                {hasSp500 && (
                 <button
                   onClick={() => switchMarket('sp500')}
                   className={`p-3 rounded-lg text-xs font-medium transition-colors ${
-                    currentMarket === 'sp500'
+                    activeMarket === 'sp500'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}
@@ -91,12 +118,13 @@ function App() {
                   <DollarSign className="h-4 w-4 mx-auto mb-1" />
                   S&P 500
                 </button>
+                )}
               </div>
             </div>
 
             {/* Navigation */}
             <nav className="flex-1 p-4 space-y-2">
-              {currentMarket === 'crypto' ? (
+              {activeMarket === 'crypto' && hasCrypto ? (
                 <>
                   <Link
                     to="/"
@@ -115,34 +143,7 @@ function App() {
                     <span>Advanced Analysis</span>
                   </Link>
                 </>
-              ) : currentMarket === 'ngx' ? (
-                <>
-                  <Link
-                    to="/ngx"
-                    onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                  >
-                    <BarChart3 className="h-5 w-5" />
-                    <span>NGX Dashboard</span>
-                  </Link>
-                  <Link
-                    to="/ngx-analysis"
-                    onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                  >
-                    <Brain className="h-5 w-5" />
-                    <span>Advanced Analysis</span>
-                  </Link>
-                  <Link
-                    to="/ngx-setups"
-                    onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                  >
-                    <Target className="h-5 w-5" />
-                    <span>Weekly Setups</span>
-                  </Link>
-                </>
-              ) : (
+              ) : activeMarket === 'sp500' && hasSp500 ? (
                 <>
                   <Link
                     to="/sp500"
@@ -169,26 +170,53 @@ function App() {
                     <span>Weekly Setups</span>
                   </Link>
                 </>
+              ) : (
+                <>
+                  <Link
+                    to="/ngx"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  >
+                    <BarChart3 className="h-5 w-5" />
+                    <span>NGX Dashboard</span>
+                  </Link>
+                  <Link
+                    to="/ngx-analysis"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  >
+                    <Brain className="h-5 w-5" />
+                    <span>Advanced Analysis</span>
+                  </Link>
+                  <Link
+                    to="/ngx-setups"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                  >
+                    <Target className="h-5 w-5" />
+                    <span>Weekly Setups</span>
+                  </Link>
+                </>
               )}
             </nav>
 
             {/* Market Status */}
             <div className="p-4 border-t border-gray-700">
               <div className="text-xs text-gray-400 mb-2">Market Status</div>
-              {currentMarket === 'crypto' ? (
+              {activeMarket === 'crypto' && hasCrypto ? (
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-green-400 text-sm">Crypto Markets Open</span>
                 </div>
-              ) : currentMarket === 'ngx' ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-orange-400 text-sm">NGX Closed</span>
-                </div>
-              ) : (
+              ) : activeMarket === 'sp500' && hasSp500 ? (
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-green-400 text-sm">US Markets Open</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span className="text-orange-400 text-sm">NGX Closed</span>
                 </div>
               )}
               <div className="text-xs text-gray-500 mt-1">
@@ -209,27 +237,48 @@ function App() {
           )}
 
           {/* Content Area */}
-          <div className="p-6">
-            <Routes>
-              {/* Crypto Routes */}
-              <Route path="/" element={<TradingDashboard />} />
-              <Route path="/crypto-analysis" element={<SeunBotAnalysis />} />
-              
-              {/* NGX Routes */}
-              <Route path="/ngx" element={<NGXDashboard />} />
-              <Route path="/ngx-analysis" element={
-                <div className="space-y-6">
-                  <NGXDashboard />
-                  <NGXAdvancedAnalysis selectedStock="GTCO" marketData={[]} />
-                </div>
-              } />
-              <Route path="/ngx-setups" element={<NGXWeeklySetupsPanel />} />
+          <div className="px-3 pb-4 pt-20 sm:px-5 sm:pb-6 lg:p-6 lg:pt-6">
+            <Suspense fallback={<div className="text-gray-400">Loading market module...</div>}>
+              <Routes>
+                {/* Crypto Routes */}
+                {hasCrypto ? (
+                  <>
+                    <Route path="/" element={<TradingDashboard />} />
+                    <Route path="/crypto-analysis" element={<SeunBotAnalysis />} />
+                  </>
+                ) : (
+                  <Route path="/" element={<Navigate to={fallbackRoute} replace />} />
+                )}
 
-              {/* S&P 500 Routes */}
-              <Route path="/sp500" element={<SP500Dashboard />} />
-              <Route path="/sp500-analysis" element={<SP500AdvancedAnalysis />} />
-              <Route path="/sp500-setups" element={<SP500WeeklySetupsPanel />} />
-            </Routes>
+                {/* NGX Routes */}
+                {hasNgx && (
+                  <>
+                    <Route path="/ngx" element={<NGXDashboard />} />
+                    <Route
+                      path="/ngx-analysis"
+                      element={
+                        <div className="space-y-6">
+                          <NGXDashboard />
+                          <NGXAdvancedAnalysis selectedStock="GTCO" marketData={[]} />
+                        </div>
+                      }
+                    />
+                    <Route path="/ngx-setups" element={<NGXWeeklySetupsPanel />} />
+                  </>
+                )}
+
+                {/* S&P 500 Routes */}
+                {hasSp500 && (
+                  <>
+                    <Route path="/sp500" element={<SP500Dashboard />} />
+                    <Route path="/sp500-analysis" element={<SP500AdvancedAnalysis />} />
+                    <Route path="/sp500-setups" element={<SP500WeeklySetupsPanel />} />
+                  </>
+                )}
+
+                <Route path="*" element={<Navigate to={fallbackRoute} replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </div>
       </div>

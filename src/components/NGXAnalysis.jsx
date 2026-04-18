@@ -18,10 +18,11 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
       const data = marketData.find(stock => stock.symbol === selectedStock)
       if (data) {
         setStockData(data)
-      } else {
-        const fetchedData = await RealNGXDataService.fetchStockData(selectedStock)
-        setStockData(fetchedData)
       }
+
+      // Always refresh selected symbol from service so fallback chain applies
+      const fetchedData = await RealNGXDataService.fetchStockData(selectedStock)
+      setStockData(fetchedData)
     } catch (error) {
       console.error('Error loading stock data:', error)
     } finally {
@@ -53,25 +54,33 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
   return (
     <div className="space-y-6">
       {/* Stock Header */}
-      <div className="glass-effect rounded-lg p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <div className="flex items-center space-x-3">
-              <h2 className="text-3xl font-bold text-white">{stockData.symbol}</h2>
-              {stockData.isMock && (
-                <span className="px-2 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded">Mock Data</span>
-              )}
+      <div className="glass-effect rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+          <div className="min-w-0">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="relative h-12 w-12 rounded-xl bg-gray-700/50 flex items-center justify-center overflow-hidden">
+                <Activity className="h-5 w-5 text-gray-400" />
+                {stockData.imageUrl && (
+                  <img
+                    src={stockData.imageUrl}
+                    alt={`${stockData.symbol} logo`}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                )}
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">{stockData.symbol}</h2>
               {stockData.type === 'ETF' && (
                 <span className="px-2 py-1 text-xs bg-purple-500/20 text-purple-400 rounded">ETF</span>
               )}
             </div>
-            <p className="text-gray-400 mt-1">{stockData.name}</p>
+            <p className="text-gray-400 mt-1 break-words">{stockData.name}</p>
             <p className="text-sm text-gray-500">{stockData.sector}</p>
           </div>
           
-          <div className="text-right">
-            <div className="text-3xl font-bold text-white">₦{stockData.price.toFixed(2)}</div>
-            <div className={`flex items-center justify-end space-x-1 mt-1 ${
+          <div className="text-left sm:text-right">
+            <div className="text-2xl sm:text-3xl font-bold text-white">₦{stockData.price.toFixed(2)}</div>
+            <div className={`flex items-center sm:justify-end space-x-1 mt-1 ${
               stockData.changePercent >= 0 ? 'text-green-400' : 'text-red-400'
             }`}>
               {stockData.changePercent >= 0 ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
@@ -86,13 +95,15 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mt-6">
           <div className="bg-gray-700/30 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-2">
               <BarChart3 className="h-4 w-4 text-blue-400" />
               <span className="text-xs text-gray-400">Open</span>
             </div>
-            <div className="text-lg font-semibold text-white">₦{stockData.open.toFixed(2)}</div>
+            <div className="text-lg font-semibold text-white">
+              {stockData.open === null || stockData.open === undefined ? '-' : `₦${stockData.open.toFixed(2)}`}
+            </div>
           </div>
 
           <div className="bg-gray-700/30 rounded-lg p-4">
@@ -125,8 +136,8 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
         {/* Data Source Info */}
         {stockData.sources && stockData.sources.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-700">
-            <div className="flex items-center justify-between text-xs text-gray-400">
-              <span>Data Sources: {stockData.sources.join(', ')}</span>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-400">
+              <span className="break-words">Data Sources: {stockData.sources.join(', ')}</span>
               <span>Updated: {new Date(stockData.timestamp).toLocaleString()}</span>
             </div>
           </div>
@@ -134,10 +145,10 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex bg-gray-800 rounded-lg p-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 bg-gray-800 rounded-lg p-1 gap-1">
         <button
           onClick={() => setActiveTab('technical')}
-          className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             activeTab === 'technical' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -145,7 +156,7 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
         </button>
         <button
           onClick={() => setActiveTab('ai')}
-          className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             activeTab === 'ai' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -165,7 +176,9 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
               <div className="bg-gray-700/30 rounded-lg p-4">
                 <p className="text-white">
                   {stockData.changePercent >= 0 ? 'Bullish' : 'Bearish'} momentum with {Math.abs(stockData.changePercent).toFixed(2)}% {stockData.changePercent >= 0 ? 'gain' : 'loss'} today.
-                  Current price is trading {stockData.price > stockData.open ? 'above' : 'below'} the opening price.
+                  {stockData.open === null || stockData.open === undefined
+                    ? ' Opening price is currently unavailable.'
+                    : ` Current price is trading ${stockData.price > stockData.open ? 'above' : 'below'} the opening price.`}
                 </p>
               </div>
             </div>

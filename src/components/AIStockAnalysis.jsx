@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, Target, Brain, Star, RefreshCw, DollarSign, Activity, BarChart3, Shield, Clock, Zap, Globe, Newspaper } from 'lucide-react';
-import AIStockAnalyzer from '../services/AIStockAnalyzer';
+import AIAnalysisEndpointService from '../services/AIAnalysisEndpointService';
 
 const AIStockAnalysis = ({ stock }) => {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!stock?.symbol) {
+      setAnalysis(null);
+      setLoading(false);
+      return;
+    }
+
     loadAnalysis();
   }, [stock.symbol]);
 
   const loadAnalysis = async () => {
     setLoading(true);
     try {
-      const result = await AIStockAnalyzer.analyzeStock(stock);
+      const result = await AIAnalysisEndpointService.analyzeStock(stock);
       setAnalysis(result);
     } catch (error) {
       console.error('Error loading analysis:', error);
@@ -23,7 +29,7 @@ const AIStockAnalysis = ({ stock }) => {
   };
 
   const handleRefresh = () => {
-    AIStockAnalyzer.clearCache();
+    AIAnalysisEndpointService.clearCache();
     loadAnalysis();
   };
 
@@ -32,7 +38,7 @@ const AIStockAnalysis = ({ stock }) => {
       <div className="bg-gray-800 rounded-lg p-6 animate-pulse space-y-4">
         <div className="flex items-center gap-2 mb-4">
           <Globe className="w-5 h-5 text-blue-400 animate-spin" />
-          <div className="text-sm text-gray-400">Searching web for real-time data...</div>
+          <div className="text-sm text-gray-400">Loading AI analysis from API endpoints...</div>
         </div>
         <div className="h-4 bg-gray-700 rounded w-3/4 mb-4"></div>
         <div className="h-4 bg-gray-700 rounded w-1/2 mb-2"></div>
@@ -82,14 +88,18 @@ const AIStockAnalysis = ({ stock }) => {
     }
   };
 
+  const targetUpside = analysis.currentPrice > 0
+    ? ((analysis.priceTarget / analysis.currentPrice - 1) * 100)
+    : 0;
+
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+      <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-start gap-2 min-w-0">
             <Brain className={`w-6 h-6 ${analysis.isAI ? 'text-purple-400' : 'text-blue-400'}`} />
-            <div>
+            <div className="min-w-0">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 {analysis.isAI ? 'AI-Powered Analysis' : 'Technical Analysis'}
                 {analysis.webDataUsed && (
@@ -99,10 +109,10 @@ const AIStockAnalysis = ({ stock }) => {
                   </span>
                 )}
               </h3>
-              <p className="text-xs text-gray-400">
-                {analysis.dataQuality === 'Web-Enhanced' ? '🌐 Web search data' : 
-                 analysis.dataQuality === 'Real-time' ? '🟢 Real-time data' : 
-                 '🟡 Simulated data'} • 
+              <p className="text-xs text-gray-400 break-words">
+                {analysis.dataQuality === 'Real-time' ? '🟢 API data' : 
+                 analysis.dataQuality === 'Fallback' ? '🟡 Fallback data' : 
+                 '⚪ Data'} • 
                 Price Source: {analysis.priceSource} •
                 Updated {new Date(analysis.timestamp).toLocaleTimeString()}
               </p>
@@ -111,7 +121,7 @@ const AIStockAnalysis = ({ stock }) => {
           <button
             onClick={handleRefresh}
             className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-            title="Refresh analysis with new web search"
+            title="Refresh analysis from endpoints"
           >
             <RefreshCw className="w-4 h-4 text-gray-400" />
           </button>
@@ -119,12 +129,12 @@ const AIStockAnalysis = ({ stock }) => {
 
         {/* Current Price Info */}
         <div className="bg-gray-700/50 rounded-lg p-4 mb-4">
-          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm text-gray-400">Current Price {analysis.webDataUsed && '(Web-Verified)'}</div>
               <div className="text-2xl font-bold text-white">₦{analysis.currentPrice.toFixed(2)}</div>
             </div>
-            <div className="text-right">
+              <div className="text-left sm:text-right">
               <div className="text-sm text-gray-400">Daily Change</div>
               <div className={`text-lg font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
@@ -135,7 +145,7 @@ const AIStockAnalysis = ({ stock }) => {
 
         {/* Recommendation Card */}
         <div className={`border-2 rounded-lg p-4 ${getRecommendationColor(analysis.recommendation)}`}>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
             <span className="text-sm font-medium">Recommendation</span>
             <div className="flex items-center gap-1">
               {[...Array(5)].map((_, i) => (
@@ -157,7 +167,7 @@ const AIStockAnalysis = ({ stock }) => {
         <div className="bg-gray-800 rounded-lg p-6">
           <h4 className="text-sm font-medium text-blue-400 mb-3 flex items-center gap-2">
             <Newspaper className="w-4 h-4" />
-            Recent News & Updates (From Web Search)
+            Recent News & Updates (From Sentiment API)
           </h4>
           <ul className="space-y-2">
             {analysis.recentNews.map((news, index) => (
@@ -170,16 +180,16 @@ const AIStockAnalysis = ({ stock }) => {
         </div>
       )}
 
-      {/* Analyst Ratings (if available from web search) */}
-      {analysis.analystRatings && analysis.analystRatings !== 'No analyst ratings available' && (
+      {/* Analyst Ratings */}
+      {analysis.analystRatings && !analysis.analystRatings.toLowerCase().startsWith('no analyst ratings available') && (
         <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-sm font-medium text-purple-400 mb-3">Analyst Consensus (From Web Search)</h4>
+          <h4 className="text-sm font-medium text-purple-400 mb-3">Analyst Consensus</h4>
           <p className="text-sm text-gray-300">{analysis.analystRatings}</p>
         </div>
       )}
 
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-gray-800 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2">
             {getSentimentIcon(analysis.sentiment)}
@@ -207,7 +217,7 @@ const AIStockAnalysis = ({ stock }) => {
             ₦{analysis.priceTarget.toFixed(2)}
           </div>
           <div className="text-xs text-gray-400">
-            {((analysis.priceTarget / analysis.currentPrice - 1) * 100).toFixed(1)}% upside
+            {targetUpside.toFixed(1)}% upside
           </div>
         </div>
 
@@ -225,9 +235,9 @@ const AIStockAnalysis = ({ stock }) => {
         <div className="bg-gray-800 rounded-lg p-6">
           <h4 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
             <DollarSign className="w-4 h-4" />
-            Trading Levels {analysis.webDataUsed && '(Web-Verified)'}
+            Trading Levels
           </h4>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <div className="text-xs text-gray-400 mb-1">Entry Point</div>
               <div className="text-lg font-semibold text-green-400">₦{analysis.entryPoint.toFixed(2)}</div>
@@ -281,7 +291,7 @@ const AIStockAnalysis = ({ stock }) => {
         <div className="bg-gray-800 rounded-lg p-6">
           <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
             <Zap className="w-4 h-4" />
-            Trading Strategy {analysis.webDataUsed && '(Based on Web Data)'}
+            Trading Strategy
           </h4>
           <p className="text-sm text-gray-300 leading-relaxed">{analysis.tradingStrategy}</p>
         </div>
@@ -290,7 +300,7 @@ const AIStockAnalysis = ({ stock }) => {
       {/* Key Insights */}
       <div className="bg-gray-800 rounded-lg p-6">
         <h4 className="text-sm font-medium text-gray-400 mb-3">
-          Key Insights {analysis.webDataUsed && '(Web-Enhanced)'}
+          Key Insights
         </h4>
         <ul className="space-y-2">
           {analysis.insights.map((insight, index) => (
@@ -340,7 +350,7 @@ const AIStockAnalysis = ({ stock }) => {
         {analysis.catalysts && analysis.catalysts.length > 0 && (
           <div className="bg-gray-800 rounded-lg p-6">
             <h4 className="text-sm font-medium text-green-400 mb-3">
-              Positive Catalysts {analysis.webDataUsed && '(From Web)'}
+              Positive Catalysts
             </h4>
             <ul className="space-y-2">
               {analysis.catalysts.map((catalyst, index) => (
@@ -371,9 +381,9 @@ const AIStockAnalysis = ({ stock }) => {
 
       {/* Footer Info */}
       <div className="bg-gray-800/50 rounded-lg p-4">
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500">
           <div className="flex items-center gap-2">
-            <span>Analysis Type: {analysis.isAI ? 'AI-Powered (ChatGPT)' : 'Technical Indicators'}</span>
+            <span>Analysis Type: API-Powered AI Analysis</span>
             {analysis.webDataUsed && (
               <span className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-400 rounded">
                 <Globe className="w-3 h-3" />
@@ -387,7 +397,7 @@ const AIStockAnalysis = ({ stock }) => {
         </div>
         {analysis.isAI && (
           <div className="text-xs text-gray-500 mt-2">
-            💡 This analysis uses real-time web search for accurate market data and is cached for 30 minutes. Click refresh to search the web again.
+            Powered by: /api/Analysis/comprehensive-report, /api/Prediction/{'{symbol}'}, and /api/Prediction/{'{symbol}'}/sentiment.
           </div>
         )}
       </div>

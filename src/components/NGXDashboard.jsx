@@ -42,7 +42,9 @@ const NGXDashboard = () => {
         high: update.high ?? updated[idx].high,
         low: update.low ?? updated[idx].low,
         timestamp: update.timestamp ? new Date(update.timestamp).toISOString() : updated[idx].timestamp,
-        sources: update.source ? [update.source] : updated[idx].sources
+        sources: Array.isArray(update.sources) && update.sources.length > 0
+          ? update.sources
+          : (update.source ? [update.source] : updated[idx].sources)
       }
       return updated
     })
@@ -144,10 +146,10 @@ const NGXDashboard = () => {
     .sort((a, b) => a.changePercent - b.changePercent)
     .slice(0, 5)
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 p-6">
-        <div className="max-w-7xl mx-auto">
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 px-3 py-4 sm:px-4 sm:py-5 lg:p-6">
+          <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
@@ -160,17 +162,17 @@ const NGXDashboard = () => {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 p-6">
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 px-3 py-4 sm:px-4 sm:py-5 lg:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col gap-4 mb-8 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-3 sm:items-center min-w-0">
             <MapPin className="h-8 w-8 text-green-500" />
-            <div>
-              <h1 className="text-3xl font-bold text-white">Nigerian Stock Exchange</h1>
-              <div className="flex items-center gap-3">
-                <p className="text-gray-400">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">Nigerian Stock Exchange</h1>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
+                  <p className="text-sm sm:text-base text-gray-400">
                   {stockCount} Stocks • {etfCount} ETFs • {marketSummary?.sources?.length || 0} Data Sources
                 </p>
                 {wsStatus === 'connected' && (
@@ -198,23 +200,15 @@ const NGXDashboard = () => {
             </div>
           </div>
           
-          <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
             {/* Data Source Indicator */}
-            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg ${
-              marketSummary?.isMock ? 'bg-yellow-500/20' : 'bg-green-500/20'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${
-                marketSummary?.isMock ? 'bg-yellow-500' : 'bg-green-500 animate-pulse'
-              }`}></div>
-              <span className={`text-sm font-medium ${
-                marketSummary?.isMock ? 'text-yellow-400' : 'text-green-400'
-              }`}>
-                {marketSummary?.isMock ? 'Mock Data' : 'Live Data'}
-              </span>
+            <div className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-green-500/20">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-sm font-medium text-green-400">Assets API</span>
             </div>
 
             {lastUpdate && (
-              <div className="text-xs text-gray-400">
+                <div className="hidden sm:block text-xs text-gray-400">
                 Updated: {lastUpdate.toLocaleTimeString()}
               </div>
             )}
@@ -227,10 +221,11 @@ const NGXDashboard = () => {
               <RefreshCw className="h-5 w-5" />
             </button>
             
-            <div className="flex bg-gray-800 rounded-lg p-1">
+              <div className="w-full lg:w-auto overflow-x-auto">
+                <div className="flex w-max min-w-full bg-gray-800 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('analysis')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   viewMode === 'analysis' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -238,7 +233,7 @@ const NGXDashboard = () => {
               </button>
               <button
                 onClick={() => setViewMode('ai-insights')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   viewMode === 'ai-insights' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -246,7 +241,7 @@ const NGXDashboard = () => {
               </button>
               <button
                 onClick={() => setViewMode('watchlist')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   viewMode === 'watchlist' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -254,18 +249,19 @@ const NGXDashboard = () => {
               </button>
               <button
                 onClick={() => setViewMode('screener')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   viewMode === 'screener' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 Screener
               </button>
+                </div>
             </div>
           </div>
         </div>
 
         {/* Market Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-8">
           {/* NGX All Share Index */}
           <div className="glass-effect rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
@@ -363,7 +359,7 @@ const NGXDashboard = () => {
         )}
 
         {/* Main Content Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
           {/* Left Sidebar - Stock List */}
           <div className="lg:col-span-1">
             <div className="glass-effect rounded-lg p-6">
@@ -419,7 +415,7 @@ const NGXDashboard = () => {
               </div>
 
               {/* Stock List */}
-              <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-[60vh] lg:max-h-96 overflow-y-auto">
                 {(viewMode === 'watchlist' 
                   ? allStocks.filter(stock => watchlist.includes(stock.symbol))
                   : filteredStocks
@@ -436,14 +432,21 @@ const NGXDashboard = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <SectorIcon className="h-4 w-4 text-gray-400" />
-                          <span className="font-medium text-white">{stock.symbol}</span>
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <div className="relative h-5 w-5 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <SectorIcon className="h-3.5 w-3.5 text-gray-400" />
+                            {stock.imageUrl && (
+                              <img
+                                src={stock.imageUrl}
+                                alt={`${stock.symbol} logo`}
+                                className="absolute inset-0 h-full w-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = 'none' }}
+                              />
+                            )}
+                          </div>
+                          <span className="font-medium text-white truncate">{stock.symbol}</span>
                           {stock.type === 'ETF' && (
                             <span className="text-xs px-1 py-0.5 bg-purple-500/20 text-purple-400 rounded">ETF</span>
-                          )}
-                          {stock.isMock && (
-                            <span className="text-xs px-1 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">Mock</span>
                           )}
                           <button
                             onClick={(e) => {
@@ -454,7 +457,7 @@ const NGXDashboard = () => {
                                 addToWatchlist(stock.symbol)
                               }
                             }}
-                            className="ml-auto"
+                            className="ml-auto flex-shrink-0"
                           >
                             <Star className={`h-4 w-4 ${
                               watchlist.includes(stock.symbol) ? 'text-yellow-400 fill-current' : 'text-gray-400'
@@ -545,7 +548,7 @@ const NGXDashboard = () => {
 
             {viewMode === 'watchlist' && (
               <div className="glass-effect rounded-lg p-6">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between gap-3 mb-6">
                   <h3 className="text-lg font-semibold text-white">Watchlist Overview</h3>
                   <div className="flex items-center space-x-2">
                     <button className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-400">
@@ -564,8 +567,8 @@ const NGXDashboard = () => {
                     <p className="text-sm">Add stocks to track their performance</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[760px]">
                       <thead>
                         <tr className="border-b border-gray-700">
                           <th className="text-left py-3 px-4 text-gray-400 font-medium">Symbol</th>
@@ -578,14 +581,24 @@ const NGXDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {allStocks.filter(stock => watchlist.includes(stock.symbol)).map((stock) => (
+                        {allStocks.filter(stock => watchlist.includes(stock.symbol)).map((stock) => {
+                          const SectorIcon = getSectorIcon(stock.sector)
+                          return (
                           <tr key={stock.symbol} className="border-b border-gray-800 hover:bg-gray-800/30">
                             <td className="py-3 px-4">
                               <div className="flex items-center space-x-2">
+                                <div className="relative h-6 w-6 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  <SectorIcon className="h-4 w-4 text-gray-400" />
+                                  {stock.imageUrl && (
+                                    <img
+                                      src={stock.imageUrl}
+                                      alt={`${stock.symbol} logo`}
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                    />
+                                  )}
+                                </div>
                                 <div className="text-white font-medium">{stock.symbol}</div>
-                                {stock.isMock && (
-                                  <span className="text-xs px-1 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">Mock</span>
-                                )}
                               </div>
                             </td>
                             <td className="py-3 px-4">
@@ -620,7 +633,8 @@ const NGXDashboard = () => {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

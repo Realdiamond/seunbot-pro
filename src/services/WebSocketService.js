@@ -46,6 +46,12 @@ class WebSocketService {
   async connect(marketType, symbols = []) {
     this.marketType = marketType;
 
+    // NGX must use SeunBot API polling path only to stay aligned with dashboard endpoint mapping.
+    if (marketType === 'ngx') {
+      this._startPolling(symbols);
+      return;
+    }
+
     // Try Polygon first, then TwelveData
     if (this.apiKeys.polygon) {
       try {
@@ -491,27 +497,24 @@ class WebSocketService {
             });
           });
         } else if (this.marketType === 'ngx') {
-          const { default: FinancialDataAPI } = await import('./FinancialDataAPI');
-          const data = await FinancialDataAPI.fetchNGXData();
-          if (data && data.stocks) {
-            data.stocks.forEach(stock => {
-              if (this.subscriptions.has(stock.symbol)) {
-                this._handlePriceUpdate({
-                  symbol: stock.symbol,
-                  price: stock.price,
-                  volume: stock.volume,
-                  open: stock.open,
-                  high: stock.high,
-                  low: stock.low,
-                  previousClose: stock.previousClose,
-                  change: stock.change,
-                  changePercent: stock.changePercent,
-                  timestamp: Date.now(),
-                  source: 'HTTP Polling'
-                });
-              }
+          const { default: RealNGXDataService } = await import('./RealNGXDataService');
+          const results = await RealNGXDataService.fetchMultipleStocks(symbols);
+          results.forEach(stock => {
+            this._handlePriceUpdate({
+              symbol: stock.symbol,
+              price: stock.price,
+              volume: stock.volume,
+              open: stock.open,
+              high: stock.high,
+              low: stock.low,
+              previousClose: stock.previousClose,
+              change: stock.change,
+              changePercent: stock.changePercent,
+              timestamp: Date.now(),
+              source: 'SeunBot API Polling',
+              sources: stock.sources
             });
-          }
+          });
         }
       } catch (error) {
         console.error('Polling error:', error.message);
