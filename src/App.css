@@ -85,14 +85,6 @@ body {
   animation: spin 1s linear infinite;
 }
 
-/* Responsive utilities */
-@media (max-width: 768px) {
-  .glass-effect {
-    margin: 0.5rem;
-    padding: 1rem;
-  }
-}
-
 /* Chart container styles */
 .chart-container {
   position: relative;

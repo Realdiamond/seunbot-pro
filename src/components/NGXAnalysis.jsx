@@ -145,7 +145,7 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 bg-gray-800 rounded-lg p-1 gap-1">
+      <div className="grid grid-cols-2 bg-gray-800 rounded-lg p-1 gap-1">
         <button
           onClick={() => setActiveTab('technical')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${

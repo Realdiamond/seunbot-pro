@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { 
   MapPin, Building, Fuel, Package, Phone, Factory, Shield, 
   TrendingUp, TrendingDown, Volume2, BarChart3, RefreshCw,
@@ -23,6 +23,9 @@ const NGXDashboard = () => {
   const [watchlist, setWatchlist] = useState(['GTCO', 'DANGCEM', 'MTNN', 'ZENITHBANK'])
   const [lastUpdate, setLastUpdate] = useState(null)
   const [wsStatus, setWsStatus] = useState('disconnected')
+  const [mobileAssetQuery, setMobileAssetQuery] = useState('')
+  const [showMobileAssetPicker, setShowMobileAssetPicker] = useState(false)
+  const mobileAssetPickerRef = useRef(null)
 
   const sectors = ['All', 'Banking', 'Oil & Gas', 'Consumer Goods', 'Telecommunications', 'Industrial Goods', 'Insurance', 'Conglomerates', 'Healthcare', 'ETF']
   const types = ['All', 'Stock', 'ETF']
@@ -64,6 +67,23 @@ const NGXDashboard = () => {
     return () => {
       clearInterval(interval)
       ngxWebSocket.disconnect()
+    }
+  }, [])
+
+  useEffect(() => {
+    const closePicker = (event) => {
+      if (!mobileAssetPickerRef.current) return
+      if (!mobileAssetPickerRef.current.contains(event.target)) {
+        setShowMobileAssetPicker(false)
+      }
+    }
+
+    document.addEventListener('mousedown', closePicker)
+    document.addEventListener('touchstart', closePicker)
+
+    return () => {
+      document.removeEventListener('mousedown', closePicker)
+      document.removeEventListener('touchstart', closePicker)
     }
   }, [])
 
@@ -131,6 +151,29 @@ const NGXDashboard = () => {
     setWatchlist(watchlist.filter(s => s !== symbol))
   }
 
+  const mobileAssetMatches = useMemo(() => {
+    const query = mobileAssetQuery.trim().toLowerCase()
+
+    if (!query) {
+      return allStocks.slice(0, 80)
+    }
+
+    return allStocks
+      .filter((stock) => (
+        stock.symbol.toLowerCase().includes(query)
+        || stock.name.toLowerCase().includes(query)
+      ))
+      .slice(0, 80)
+  }, [allStocks, mobileAssetQuery])
+
+  const handleMobileAssetSelect = (stock) => {
+    setSelectedStock(stock.symbol)
+    setViewMode('analysis')
+    setSearchTerm(stock.symbol)
+    setMobileAssetQuery(stock.symbol)
+    setShowMobileAssetPicker(false)
+  }
+
   // Calculate statistics
   const stockCount = allStocks.filter(s => s.type !== 'ETF' && s.sector !== 'ETF').length
   const etfCount = allStocks.filter(s => s.type === 'ETF' || s.sector === 'ETF').length
@@ -164,68 +207,66 @@ const NGXDashboard = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 px-3 py-4 sm:px-4 sm:py-5 lg:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-          <div className="flex flex-col gap-4 mb-8 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-3 sm:items-center min-w-0">
-            <MapPin className="h-8 w-8 text-green-500" />
+        <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
+          {/* Header */}
+          <div className="mb-6 sm:mb-8 rounded-2xl border border-blue-800/40 bg-slate-950/35 backdrop-blur-sm p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl font-bold text-white">Nigerian Stock Exchange</h1>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                  <p className="text-sm sm:text-base text-gray-400">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <MapPin className="h-7 w-7 text-green-500 flex-shrink-0" />
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight truncate">Nigerian Stock Exchange</h1>
+                </div>
+                <p className="text-sm sm:text-base text-gray-300 mt-2">
                   {stockCount} Stocks • {etfCount} ETFs • {marketSummary?.sources?.length || 0} Data Sources
                 </p>
-                {wsStatus === 'connected' && (
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    Live
-                  </span>
-                )}
-                {wsStatus === 'reconnecting' && (
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
-                    <WifiOff className="w-3 h-3" />
-                    Reconnecting...
-                  </span>
-                )}
-                {wsStatus === 'polling' && (
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
-                    <Wifi className="w-3 h-3" />
-                    Polling (30s)
-                  </span>
-                )}
               </div>
-            </div>
-          </div>
-          
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
-            {/* Data Source Indicator */}
-            <div className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-green-500/20">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-sm font-medium text-green-400">Assets API</span>
+
+              <button
+                onClick={() => { ngxWebSocket.disconnect(); loadNGXData(); }}
+                className="p-2 bg-gray-700/80 hover:bg-gray-600 rounded-xl text-gray-300 transition-colors"
+                title="Refresh data"
+              >
+                <RefreshCw className="h-5 w-5" />
+              </button>
             </div>
 
-            {lastUpdate && (
-                <div className="hidden sm:block text-xs text-gray-400">
-                Updated: {lastUpdate.toLocaleTimeString()}
-              </div>
-            )}
-            
-            <button
-              onClick={() => { ngxWebSocket.disconnect(); loadNGXData(); }}
-              className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-400 transition-colors"
-              title="Refresh data"
-            >
-              <RefreshCw className="h-5 w-5" />
-            </button>
-            
-              <div className="w-full lg:w-auto overflow-x-auto">
-                <div className="flex w-max min-w-full bg-gray-800 rounded-lg p-1">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {wsStatus === 'connected' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-green-300 bg-green-500/15 px-2.5 py-1 rounded-full">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  Live
+                </span>
+              )}
+              {wsStatus === 'reconnecting' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-yellow-300 bg-yellow-500/15 px-2.5 py-1 rounded-full">
+                  <WifiOff className="w-3 h-3" />
+                  Reconnecting...
+                </span>
+              )}
+              {wsStatus === 'polling' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-blue-300 bg-blue-500/15 px-2.5 py-1 rounded-full">
+                  <Wifi className="w-3 h-3" />
+                  Polling (30s)
+                </span>
+              )}
+
+              <span className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/20 text-sm font-medium text-green-300">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                Assets API
+              </span>
+
+              {lastUpdate && (
+                <span className="text-xs text-gray-400">Updated: {lastUpdate.toLocaleTimeString()}</span>
+              )}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 sm:flex sm:flex-wrap gap-2 bg-gray-900/55 rounded-xl p-1">
               <button
                 onClick={() => setViewMode('analysis')}
-                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   viewMode === 'analysis' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -233,7 +274,7 @@ const NGXDashboard = () => {
               </button>
               <button
                 onClick={() => setViewMode('ai-insights')}
-                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   viewMode === 'ai-insights' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -241,7 +282,7 @@ const NGXDashboard = () => {
               </button>
               <button
                 onClick={() => setViewMode('watchlist')}
-                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   viewMode === 'watchlist' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -249,16 +290,66 @@ const NGXDashboard = () => {
               </button>
               <button
                 onClick={() => setViewMode('screener')}
-                  className={`px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   viewMode === 'screener' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 Screener
               </button>
+            </div>
+
+            <div className="mt-4 lg:hidden" ref={mobileAssetPickerRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={mobileAssetQuery}
+                  onFocus={() => setShowMobileAssetPicker(true)}
+                  onClick={() => setShowMobileAssetPicker(true)}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setMobileAssetQuery(value)
+                    setSearchTerm(value)
+                    setShowMobileAssetPicker(true)
+                  }}
+                  placeholder={`Search assets (current: ${selectedStock})`}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-700 bg-gray-900/80 text-white placeholder-gray-400 focus:outline-none focus:border-green-500"
+                />
+              </div>
+
+              {showMobileAssetPicker && (
+                <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-gray-700 bg-gray-900/95 shadow-xl shadow-black/30">
+                  {mobileAssetMatches.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-gray-400">No assets found</div>
+                  ) : (
+                    mobileAssetMatches.map((stock) => (
+                      <button
+                        key={`mobile-search-${stock.symbol}`}
+                        type="button"
+                        onClick={() => handleMobileAssetSelect(stock)}
+                        className={`w-full px-3 py-2.5 border-b border-gray-800 last:border-b-0 text-left transition-colors ${
+                          selectedStock === stock.symbol ? 'bg-green-500/15' : 'hover:bg-gray-800/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-white truncate">{stock.symbol}</div>
+                            <div className="text-xs text-gray-400 truncate">{stock.name}</div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-sm text-white">₦{stock.price.toFixed(2)}</div>
+                            <div className={`text-xs ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
+              )}
             </div>
           </div>
-        </div>
 
         {/* Market Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-8">
@@ -361,7 +452,7 @@ const NGXDashboard = () => {
         {/* Main Content Area */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
           {/* Left Sidebar - Stock List */}
-          <div className="lg:col-span-1">
+          <div className="order-2 lg:order-1 lg:col-span-1">
             <div className="glass-effect rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white">
@@ -527,7 +618,7 @@ const NGXDashboard = () => {
           </div>
 
           {/* Main Analysis Area */}
-          <div className="lg:col-span-3">
+          <div className="order-1 lg:order-2 lg:col-span-3">
             {(viewMode === 'analysis' || viewMode === 'ai-insights') && (
               <NGXAnalysis 
                 selectedStock={selectedStock}
@@ -643,6 +734,7 @@ const NGXDashboard = () => {
             )}
           </div>
         </div>
+
       </div>
     </div>
   )

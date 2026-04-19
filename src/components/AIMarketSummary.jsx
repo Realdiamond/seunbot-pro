@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, TrendingUp, TrendingDown, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
-import AIStockAnalyzer from '../services/AIStockAnalyzer';
+import AIMarketInsightsService from '../services/AIMarketInsightsService';
 
 const AIMarketSummary = ({ stocks }) => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (stocks && stocks.length > 0) {
@@ -14,19 +15,28 @@ const AIMarketSummary = ({ stocks }) => {
 
   const loadSummary = async () => {
     setLoading(true);
+    setErrorMessage('');
+
     try {
-      const result = await AIStockAnalyzer.getMarketSummary(stocks);
+      const result = await AIMarketInsightsService.getMarketSummary(stocks);
       setSummary(result);
     } catch (error) {
       console.error('Error loading market summary:', error);
+      setSummary(null);
+      setErrorMessage('Market analysis endpoint is temporarily unavailable.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleRefresh = () => {
-    AIStockAnalyzer.clearCache();
+    AIMarketInsightsService.clearCache();
     loadSummary();
+  };
+
+  const formatPercent = (count, total) => {
+    if (!total) return '0';
+    return ((count / total) * 100).toFixed(0);
   };
 
   if (loading) {
@@ -49,7 +59,7 @@ const AIMarketSummary = ({ stocks }) => {
     return (
       <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-lg p-6 border border-purple-500/20 text-center">
         <Brain className="w-12 h-12 mx-auto mb-2 text-purple-400 opacity-50" />
-        <p className="text-gray-400">Market analysis unavailable</p>
+        <p className="text-gray-400">{errorMessage || 'Market analysis unavailable'}</p>
       </div>
     );
   }
@@ -77,6 +87,10 @@ const AIMarketSummary = ({ stocks }) => {
         </button>
       </div>
 
+      {summary.chatBrief && (
+        <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{summary.chatBrief}</p>
+      )}
+
       {/* Recommendations Overview */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
@@ -86,7 +100,7 @@ const AIMarketSummary = ({ stocks }) => {
           </div>
           <div className="text-2xl font-bold text-green-400">{summary.buyRecommendations}</div>
           <div className="text-xs text-gray-400 mt-1">
-            {((summary.buyRecommendations / summary.totalStocks) * 100).toFixed(0)}% of stocks
+            {formatPercent(summary.buyRecommendations, summary.totalStocks)}% of stocks
           </div>
         </div>
 
@@ -97,7 +111,7 @@ const AIMarketSummary = ({ stocks }) => {
           </div>
           <div className="text-2xl font-bold text-yellow-400">{summary.holdRecommendations}</div>
           <div className="text-xs text-gray-400 mt-1">
-            {((summary.holdRecommendations / summary.totalStocks) * 100).toFixed(0)}% of stocks
+            {formatPercent(summary.holdRecommendations, summary.totalStocks)}% of stocks
           </div>
         </div>
 
@@ -108,7 +122,7 @@ const AIMarketSummary = ({ stocks }) => {
           </div>
           <div className="text-2xl font-bold text-red-400">{summary.sellRecommendations}</div>
           <div className="text-xs text-gray-400 mt-1">
-            {((summary.sellRecommendations / summary.totalStocks) * 100).toFixed(0)}% of stocks
+            {formatPercent(summary.sellRecommendations, summary.totalStocks)}% of stocks
           </div>
         </div>
       </div>
@@ -143,7 +157,7 @@ const AIMarketSummary = ({ stocks }) => {
         <div>
           <h4 className="text-sm font-medium text-gray-400 mb-3">🔥 Top Buy Recommendations</h4>
           <div className="space-y-2">
-            {summary.topBuys.map((stock, index) => (
+            {summary.topBuys.map((stock) => (
               <div key={stock.symbol} className="bg-green-500/5 border border-green-500/20 rounded-lg p-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -171,7 +185,7 @@ const AIMarketSummary = ({ stocks }) => {
         <div>
           <h4 className="text-sm font-medium text-gray-400 mb-3">⚠️ Top Sell Recommendations</h4>
           <div className="space-y-2">
-            {summary.topSells.slice(0, 3).map((stock, index) => (
+            {summary.topSells.slice(0, 3).map((stock) => (
               <div key={stock.symbol} className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -195,8 +209,11 @@ const AIMarketSummary = ({ stocks }) => {
       )}
 
       {/* Timestamp */}
-      <div className="text-xs text-gray-500 text-center">
-        Analysis updated: {new Date(summary.timestamp).toLocaleString()}
+      <div className="text-xs text-gray-500 text-center space-y-1">
+        <div>Analysis updated: {new Date(summary.timestamp).toLocaleString()}</div>
+        {Array.isArray(summary.sources) && summary.sources.length > 0 && (
+          <div>Sources: {summary.sources.join(' • ')}</div>
+        )}
       </div>
     </div>
   );

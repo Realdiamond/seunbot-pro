@@ -53,17 +53,17 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
         {/* Mobile Menu Button */}
-        <div className="lg:hidden fixed top-4 left-4 z-50">
+        <div className="lg:hidden fixed top-3 left-3 z-50">
           <button
             onClick={toggleSidebar}
-            className="p-2 bg-gray-800 rounded-lg text-white hover:bg-gray-700 transition-colors"
+            className="p-2.5 bg-gray-900/80 backdrop-blur border border-gray-700/70 rounded-xl text-white hover:bg-gray-800 transition-colors"
           >
             {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
 
         {/* Sidebar */}
-        <div className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900/95 backdrop-blur-sm border-r border-gray-700 transform transition-transform duration-300 ease-in-out ${
+        <div className={`fixed inset-y-0 left-0 z-40 w-[82vw] max-w-xs sm:w-72 lg:w-64 bg-gray-900/95 backdrop-blur-sm border-r border-gray-700 transform transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}>
           <div className="flex flex-col h-full">
@@ -237,7 +237,7 @@ function App() {
           )}
 
           {/* Content Area */}
-          <div className="px-3 pb-4 pt-20 sm:px-5 sm:pb-6 lg:p-6 lg:pt-6">
+          <div className="px-3 pb-4 pt-16 sm:px-5 sm:pb-6 sm:pt-20 lg:p-6 lg:pt-6">
             <Suspense fallback={<div className="text-gray-400">Loading market module...</div>}>
               <Routes>
                 {/* Crypto Routes */}
