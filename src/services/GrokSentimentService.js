@@ -9,7 +9,7 @@ import axios from 'axios';
 
 class GrokSentimentService {
   constructor() {
-    this.baseUrl = import.meta.env?.VITE_SEUNBOT_API_BASE_URL || 'https://seun-trading-bot-api-2026-28f6d6f40e1b.herokuapp.com';
+    this.baseUrl = import.meta.env?.VITE_SEUNBOT_API_BASE_URL || '';
     this.cache = new Map();
     this.cacheTtlMs = 5 * 60 * 1000; // 5 min — Grok results are expensive
     this.timeout = 35000;

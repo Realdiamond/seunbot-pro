@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class AIMarketInsightsService {
   constructor() {
-    this.baseUrl = import.meta.env?.VITE_SEUNBOT_API_BASE_URL || 'https://seun-trading-bot-api-2026-28f6d6f40e1b.herokuapp.com';
+    this.baseUrl = import.meta.env?.VITE_SEUNBOT_API_BASE_URL || '';
     this.cache = new Map();
     this.cacheTtlMs = 2 * 60 * 1000;
     this.batchChunkSize = 5; // concurrent prediction calls
