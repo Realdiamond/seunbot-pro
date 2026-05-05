@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import EnhancedNGXWebScraper from '../services/EnhancedNGXWebScraper'
 import RealNGXDataService from '../services/RealNGXDataService'
+import AIAnalysisEndpointService from '../services/AIAnalysisEndpointService'
 import { ngxWebSocket } from '../services/WebSocketService'
 
 const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
@@ -88,16 +89,19 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
       // Use real-time data if available
       const stockData = realTimeData || await RealNGXDataService.fetchStockData(selectedStock)
       
+      // Fetch AI data for the selected stock
+      const aiData = await AIAnalysisEndpointService.analyzeStock({ symbol: selectedStock, price: stockData.price }).catch(() => null)
+      
       const comprehensiveAnalysis = {
-        smartMoney: generateNGXSmartMoneyAnalysis(stockData),
-        patterns: generateNGXGeometricPatterns(stockData),
-        elliottWave: generateNGXElliottWave(stockData),
-        volume: generateNGXVolumeAnalysis(stockData),
-        fundamental: generateNGXFundamentalAnalysis(stockData),
-        cycle: generateNGXCycleAnalysis(stockData),
-        gann: generateNGXGannAnalysis(stockData),
-        planetary: generateNGXPlanetaryAnalysis(stockData),
-        weeklySetups: generateWeeklySetupsAnalysis(stockData)
+        smartMoney: generateNGXSmartMoneyAnalysis(stockData, aiData),
+        patterns: null,
+        elliottWave: generateNGXElliottWave(stockData, aiData),
+        volume: generateNGXVolumeAnalysis(stockData, aiData),
+        fundamental: generateNGXFundamentalAnalysis(stockData, aiData),
+        cycle: null,
+        gann: null,
+        planetary: null,
+        weeklySetups: null
       }
 
       setAnalysis(comprehensiveAnalysis)
@@ -109,26 +113,26 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
   }
 
   // Helper function to generate analysis sections
-  const generateNGXSmartMoneyAnalysis = (stockData) => {
-    const price = stockData.price
-    const change = stockData.changePercent
-    const volume = stockData.volume
+  const generateNGXSmartMoneyAnalysis = (stockData, aiData) => {
+    const inst = aiData?.hybridComponents?.institutional || {};
+    const regime = aiData?.hybridComponents?.regime || {};
+    const hasAiData = Boolean(aiData?.hybridComponents);
     
     return {
       marketStructure: {
-        current: change > 3 ? 'Strong Bullish BOS' : change < -3 ? 'Strong Bearish BOS' : 'NGX Consolidation',
+        current: inst.breakOfStructure || 'Neutral',
         alignment: { 
-          direction: change > 0 ? 'Bullish' : 'Bearish', 
-          alignment: Math.abs(change) * 12,
-          ngxBias: 'Following Nigerian market sentiment'
+          direction: aiData?.hybridDirection || 'Neutral', 
+          alignment: aiData?.hybridFinalScore ? Math.abs(aiData.hybridFinalScore) * 10 : 0,
+          ngxBias: 'AI Model Alignment'
         },
-        timeframes: generateNGXTimeframeStructure(stockData),
-        confluences: generateNGXStructureConfluences(change, volume, stockData.sector || 'Banking')
+        timeframes: { short: 'Wait', medium: 'Wait', long: 'Wait' },
+        confluences: { total: 3, description: 'Hybrid AI Confluences' }
       },
       liquidityAnalysis: {
-        zones: generateNGXLiquidityZones(price, stockData.high, stockData.low),
-        fairValueGaps: generateNGXFairValueGaps(stockData),
-        orderBlocks: generateNGXOrderBlocks(stockData),
+        zones: { resistance: [], support: [] },
+        fairValueGaps: { current: inst.fairValueGaps || 'None' },
+        orderBlocks: { nearest: inst.orderBlocks || 'None' },
         nigerian_specifics: {
           cbn_impact: 'Monetary policy affecting liquidity',
           oil_correlation: (stockData.sector === 'Oil & Gas') ? 'High' : 'Medium',
@@ -136,23 +140,22 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
         }
       },
       premiumDiscount: {
-        zone: (price - stockData.low) / (stockData.high - stockData.low) > 0.7 ? 'Premium' : 
-              (price - stockData.low) / (stockData.high - stockData.low) < 0.3 ? 'Discount' : 'Equilibrium',
-        currentPosition: (price - stockData.low) / (stockData.high - stockData.low),
+        zone: regime.marketRegime || 'Ranging',
+        currentPosition: 0.5,
         ngx_context: {
-          market_phase: 'Nigerian market cycle consideration',
-          sector_rotation: getSectorRotationPhase(stockData.sector || 'Banking'),
-          foreign_participation: 'International investor sentiment'
+          market_phase: regime.marketRegime || 'Consolidation',
+          sector_rotation: 'Sector Rotation Phase',
+          foreign_participation: 'Institutional Activity'
         }
       },
-      signals: generateNGXSmartMoneySignals(stockData),
-      confidence: Math.min(95, 60 + Math.abs(change) * 5 + (volume / 2000000)),
+      signals: [],
+      confidence: hasAiData ? (aiData.confidence || 3) * 20 : 0,
       nigerian_factors: {
-        regulatory_environment: getRegulatoryImpact(stockData.sector || 'Banking'),
-        economic_indicators: 'Inflation and GDP growth impact',
-        political_stability: 'Government policy effects on sector'
+        regulatory_environment: 'Standard regulatory environment',
+        economic_indicators: 'Macro factors baked into AI model',
+        political_stability: 'N/A'
       },
-      dataSource: stockData.isMock ? 'Mock Data' : 'Real-Time Data'
+      dataSource: hasAiData ? 'Hybrid AI API' : 'Unavailable'
     }
   }
 
@@ -231,98 +234,116 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
     return patterns
   }
 
-  const generateNGXElliottWave = (stockData) => {
-    const waveCount = determineNGXWaveCount(stockData.changePercent, stockData.volume, stockData.sector || 'Banking')
+  const generateNGXElliottWave = (stockData, aiData) => {
+    const ew = aiData?.hybridComponents?.institutional?.elliottWave || 'Detecting...';
     
     return {
-      currentWave: waveCount,
-      waveType: stockData.changePercent > 0 ? 'Impulse Wave' : 'Corrective Wave',
-      degree: stockData.volume > 20000000 ? 'Primary' : stockData.volume > 10000000 ? 'Intermediate' : 'Minor',
-      fibonacci: calculateNGXFibonacciLevels(stockData.price, stockData.changePercent),
-      projection: calculateNGXWaveProjection(stockData.price, stockData.changePercent, waveCount),
-      nextTarget: calculateNGXNextTarget(stockData.price, stockData.changePercent, waveCount),
-      invalidation: stockData.price * (waveCount.wave === 1 || waveCount.wave === 3 || waveCount.wave === 5 ? 0.94 : 1.06),
-      confidence: Math.min(95, 50 + (stockData.volume > 15000000 ? 25 : 15) + (Math.abs(stockData.changePercent) > 3 ? 20 : 10)),
+      currentWave: { wave: ew.replace(/\D/g, '') || '?', description: ew },
+      waveType: aiData?.hybridDirection === 'bullish' ? 'Impulse Wave' : 'Corrective Wave',
+      degree: 'Primary',
+      fibonacci: {
+        retracement: {
+          '0.236': stockData.price * 0.98,
+          '0.382': stockData.price * 0.95,
+          '0.500': stockData.price * 0.92,
+          '0.618': stockData.price * 0.88
+        },
+        extension: {
+          '1.272': stockData.price * 1.05,
+          '1.618': stockData.price * 1.10,
+          '2.618': stockData.price * 1.20
+        }
+      },
+      projection: stockData.price * 1.10,
+      nextTarget: aiData?.priceTarget || (stockData.price * 1.05),
+      invalidation: aiData?.stopLoss || (stockData.price * 0.95),
+      confidence: (aiData?.confidence || 3) * 20,
       nigerian_wave_characteristics: {
-        market_cycle: 'Nigerian economic cycle influence on wave structure',
-        sector_waves: getSectorWaveCharacteristics(stockData.sector || 'Banking'),
+        market_cycle: 'AI Model Detection',
+        sector_waves: 'AI Tracked Sector Waves',
         currency_impact: 'Naira strength affecting international wave patterns',
         oil_correlation: (stockData.sector === 'Oil & Gas') ? 'Waves correlate with oil price cycles' : 'Indirect oil impact'
       },
       subWaves: {
-        wave1: { target: stockData.price * 1.05, completed: true, description: 'Initial Nigerian breakout' },
-        wave2: { target: stockData.price * 0.98, completed: true, description: 'Healthy retracement' },
-        wave3: { target: stockData.price * 1.15, completed: false, current: true, description: 'Main impulse wave' },
-        wave4: { target: stockData.price * 1.08, completed: false, description: 'Corrective pullback' },
+        wave1: { target: stockData.price * 1.05, completed: true, description: 'Initial breakout' },
+        wave2: { target: stockData.price * 0.98, completed: true, description: 'Retracement' },
+        wave3: { target: stockData.price * 1.15, completed: false, current: true, description: ew },
+        wave4: { target: stockData.price * 1.08, completed: false, description: 'Corrective' },
         wave5: { target: stockData.price * 1.25, completed: false, description: 'Final extension' }
       }
     }
   }
 
-  const generateNGXVolumeAnalysis = (stockData) => ({
-    volumeProfile: {
-      rating: stockData.volume > 15000000 ? 'High' : stockData.volume > 8000000 ? 'Medium' : 'Low',
-      relation: Math.abs(stockData.changePercent) > 2 && stockData.volume > 10000000 ? 'Healthy' : 'Divergent',
-      institutionalInterest: stockData.volume > 12000000,
-      foreign_participation: stockData.volume > 20000000 ? 'High foreign interest' : 'Domestic driven',
-      ngx_context: {
-        market_depth: 'Nigerian market liquidity considerations',
-        trading_hours: 'Lagos trading session volume patterns',
-        settlement: 'T+3 settlement cycle impact on volume'
+  const generateNGXVolumeAnalysis = (stockData, aiData) => {
+    const vol = aiData?.hybridComponents?.volume || {};
+    
+    return {
+      volumeProfile: {
+        rating: vol.vwapStatus || 'Neutral',
+        relation: vol.obvTrend || 'Neutral',
+        institutionalInterest: vol.relativeVolume > 1.2,
+        foreign_participation: 'AI Volume Analysis',
+        ngx_context: {
+          market_depth: 'Liquidity consideration based on volume',
+          trading_hours: 'Lagos trading session volume patterns',
+          settlement: 'T+3 settlement cycle impact on volume'
+        }
+      },
+      volumeSpread: { rating: 'Average', signal: 'Wait' },
+      wyckoffPhase: { phase: 'AI Analyzed', description: 'Volume characteristics analyzed by hybrid model' },
+      volumeSignals: [],
+      nigerian_volume_factors: {
+        pension_funds: 'PFA investment flows impact',
+        insurance_companies: 'Insurance sector investment patterns',
+        foreign_portfolio: 'International investor participation',
+        retail_participation: 'Local retail investor activity'
+      },
+      volumeBreakdown: {
+        institutional: stockData.volume * 0.6,
+        retail: stockData.volume * 0.25,
+        foreign: stockData.volume * 0.15,
+        analysis: `AI Volume Insight: ${vol.relativeVolume > 1 ? 'High Relative Volume (' + vol.relativeVolume.toFixed(2) + 'x)' : 'Normal Relative Volume'}`
       }
-    },
-    volumeSpread: analyzeNGXVolumeSpread(stockData),
-    wyckoffPhase: determineNGXWyckoffPhase(stockData),
-    volumeSignals: generateNGXVolumeSignals(stockData),
-    nigerian_volume_factors: {
-      pension_funds: 'PFA investment flows impact',
-      insurance_companies: 'Insurance sector investment patterns',
-      foreign_portfolio: 'International investor participation',
-      retail_participation: 'Local retail investor activity'
-    },
-    volumeBreakdown: {
-      institutional: stockData.volume * 0.6,
-      retail: stockData.volume * 0.25,
-      foreign: stockData.volume * 0.15,
-      analysis: 'Strong institutional participation driving volume'
     }
-  })
+  }
 
-  const generateNGXFundamentalAnalysis = (stockData) => ({
-    valuation: {
-      fair_value: stockData.price * (0.85 + Math.random() * 0.3),
-      target_price: stockData.price * (1.08 + Math.random() * 0.15),
-      recommendation: Math.random() > 0.6 ? 'BUY' : Math.random() > 0.3 ? 'HOLD' : 'SELL',
-      ngx_pe_comparison: 'P/E vs NGX sector average',
-      dividend_sustainability: 'Nigerian tax implications and payout sustainability'
-    },
-    nigerian_fundamentals: {
-      regulatory_compliance: getRegulatoryCompliance(stockData.sector || 'Banking'),
-      local_content: getLocalContentImpact(stockData.sector || 'Banking'),
-      currency_exposure: getCurrencyExposure(stockData.sector || 'Banking'),
-      government_relations: getGovernmentRelations(stockData.sector || 'Banking'),
-      infrastructure_dependence: getInfrastructureDependence(stockData.sector || 'Banking')
-    },
-    macroeconomic_factors: {
-      oil_price_sensitivity: (stockData.sector === 'Oil & Gas') ? 'Very High' : 'Medium',
-      inflation_impact: getInflationImpact(stockData.sector || 'Banking'),
-      interest_rate_sensitivity: getInterestRateSensitivity(stockData.sector || 'Banking'),
-      exchange_rate_impact: getExchangeRateImpact(stockData.sector || 'Banking')
-    },
-    sector_dynamics: {
-      growth_prospects: getSectorGrowthProspects(stockData.sector || 'Banking'),
-      competitive_position: 'Market share and competitive advantages',
-      regulatory_changes: 'Upcoming regulatory changes impact',
-      technology_disruption: getTechnologyDisruptionRisk(stockData.sector || 'Banking')
-    },
-    financial_metrics: {
-      pe_ratio: 8.5 + Math.random() * 12,
-      pb_ratio: 0.8 + Math.random() * 2.2,
-      roe: 12 + Math.random() * 18,
-      dividend_yield: 5 + Math.random() * 10,
-      debt_equity: 0.2 + Math.random() * 0.8
+  const generateNGXFundamentalAnalysis = (stockData, aiData) => {
+    return {
+      valuation: {
+        fair_value: stockData.price,
+        target_price: aiData?.priceTarget || stockData.price * 1.05,
+        recommendation: aiData?.recommendation || 'HOLD',
+        ngx_pe_comparison: 'P/E vs NGX sector average',
+        dividend_sustainability: 'Based on fundamental summary'
+      },
+      nigerian_fundamentals: {
+        regulatory_compliance: getRegulatoryCompliance(stockData.sector || 'Banking'),
+        local_content: getLocalContentImpact(stockData.sector || 'Banking'),
+        currency_exposure: getCurrencyExposure(stockData.sector || 'Banking'),
+        government_relations: getGovernmentRelations(stockData.sector || 'Banking'),
+        infrastructure_dependence: getInfrastructureDependence(stockData.sector || 'Banking')
+      },
+      macroeconomic_factors: {
+        oil_price_sensitivity: (stockData.sector === 'Oil & Gas') ? 'Very High' : 'Medium',
+        inflation_impact: getInflationImpact(stockData.sector || 'Banking'),
+        interest_rate_sensitivity: getInterestRateSensitivity(stockData.sector || 'Banking'),
+        exchange_rate_impact: getExchangeRateImpact(stockData.sector || 'Banking')
+      },
+      sector_dynamics: {
+        growth_prospects: getSectorGrowthProspects(stockData.sector || 'Banking'),
+        competitive_position: aiData?.fundamentalAnalysis || 'No fundamental summary available',
+        regulatory_changes: 'Upcoming regulatory changes impact',
+        technology_disruption: getTechnologyDisruptionRisk(stockData.sector || 'Banking')
+      },
+      financial_metrics: {
+        pe_ratio: 0,
+        pb_ratio: 0,
+        roe: 0,
+        dividend_yield: 0,
+        debt_equity: 0
+      }
     }
-  })
+  }
 
   const generateNGXCycleAnalysis = (stockData) => ({
     nigerian_cycles: {
@@ -661,12 +682,14 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
 
   if (loading) {
     return (
-      <div className="glass-effect rounded-lg p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <MapPin className="h-5 w-5 text-green-500 animate-pulse" />
-          <h3 className="text-lg font-semibold text-white">NGX SeunBot Advanced Analysis</h3>
-          <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400">
-            {dataSource}
+      <div className="glass-effect rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Brain className="h-5 w-5 text-green-500 shrink-0" />
+            <h3 className="text-base sm:text-lg font-semibold text-white">NGX Advanced Analysis</h3>
+            <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400 whitespace-nowrap">
+              {dataSource}
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-center h-64">
@@ -682,12 +705,14 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
 
   if (!analysis) {
     return (
-      <div className="glass-effect rounded-lg p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <MapPin className="h-5 w-5 text-green-500" />
-          <h3 className="text-lg font-semibold text-white">NGX SeunBot Advanced Analysis</h3>
-          <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400">
-            {dataSource}
+      <div className="glass-effect rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <MapPin className="h-5 w-5 text-green-500 shrink-0" />
+            <h3 className="text-base sm:text-lg font-semibold text-white">NGX Advanced Analysis</h3>
+            <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400 whitespace-nowrap">
+              {dataSource}
+            </div>
           </div>
         </div>
         <div className="text-center py-8 text-gray-400">
@@ -699,20 +724,22 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
   }
 
   return (
-    <div className="glass-effect rounded-lg p-6">
+    <div className="glass-effect rounded-lg p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-2">
-          <Brain className="h-5 w-5 text-green-500" />
-          <h3 className="text-lg font-semibold text-white">NGX SeunBot Advanced Analysis</h3>
-          <div className="px-2 py-1 bg-green-500/20 rounded text-xs text-green-400">
-            {selectedStock}
-          </div>
-          <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400">
-            {dataSource}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Brain className="h-5 w-5 text-green-500 shrink-0" />
+          <h3 className="text-base sm:text-lg font-semibold text-white">NGX Advanced Analysis</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="px-2 py-1 bg-green-500/20 rounded text-xs text-green-400 whitespace-nowrap">
+              {selectedStock}
+            </div>
+            <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400 whitespace-nowrap truncate max-w-[200px] sm:max-w-none">
+              {dataSource}
+            </div>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 self-start sm:self-auto">
           <select
             value={selectedTimeframe}
             onChange={(e) => setSelectedTimeframe(e.target.value)}
@@ -739,25 +766,23 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
       {/* Real-time data indicator */}
       {realTimeData && (
         <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded">
-          <div className="flex justify-between items-center">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <div className="flex items-center flex-wrap gap-x-2">
               <span className="text-blue-400 font-medium">Live Price: </span>
-              <span className="text-white font-bold text-lg">₦{realTimeData.price.toFixed(2)}</span>
-            </div>
-            <div>
-              <span className={`font-bold ${realTimeData.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {realTimeData.changePercent >= 0 ? '+' : ''}{realTimeData.changePercent.toFixed(2)}%
+              <span className="text-white font-bold text-lg">₦{realTimeData.price?.toFixed(2) || '0.00'}</span>
+              <span className={`font-bold ml-1 ${realTimeData.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {realTimeData.changePercent >= 0 ? '+' : ''}{realTimeData.changePercent?.toFixed(2) || '0.00'}%
               </span>
             </div>
             <div className="text-xs text-gray-400">
-              Volume: {(realTimeData.volume / 1000000).toFixed(2)}M
+              Volume: {((realTimeData.volume || 0) / 1000000).toFixed(2)}M
             </div>
           </div>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex flex-wrap space-x-1 mb-6 bg-gray-800/50 rounded-lg p-1">
+      <div className="flex overflow-x-auto hide-scrollbar space-x-1 mb-6 bg-gray-800/50 rounded-lg p-1">
         {[
           { id: 'smartMoney', label: 'Smart Money', icon: BarChart3 },
           { id: 'patterns', label: 'Patterns', icon: Triangle },

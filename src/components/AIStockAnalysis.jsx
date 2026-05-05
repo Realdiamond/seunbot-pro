@@ -312,17 +312,127 @@ const AIStockAnalysis = ({ stock }) => {
         </ul>
       </div>
 
-      {/* Technical Analysis */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h4 className="text-sm font-medium text-gray-400 mb-3">Technical Analysis</h4>
-        <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">{analysis.technicalAnalysis}</p>
-      </div>
-
-      {/* Fundamental Analysis */}
-      {analysis.fundamentalAnalysis && (
+      {/* Technical Analysis — structured HybridStrategy components */}
+      {analysis.hybridComponents && (
         <div className="bg-gray-800 rounded-lg p-6">
-          <h4 className="text-sm font-medium text-gray-400 mb-3">Fundamental Analysis</h4>
-          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">{analysis.fundamentalAnalysis}</p>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-medium text-gray-400 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Hybrid Strategy Analysis
+            </h4>
+            {analysis.hybridFinalScore !== null && (
+              <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                analysis.hybridSignalStrength === 'BUY' ? 'bg-green-500/20 text-green-400' :
+                analysis.hybridSignalStrength === 'SELL' ? 'bg-red-500/20 text-red-400' :
+                'bg-yellow-500/20 text-yellow-400'
+              }`}>
+                {analysis.hybridSignalStrength} · Score {analysis.hybridFinalScore.toFixed(2)}
+              </span>
+            )}
+          </div>
+
+          {/* Factor Score Bar */}
+          {analysis.hybridFactorScores && (
+            <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { label: 'Institutional', score: analysis.hybridFactorScores.institutionalScore, weight: analysis.hybridFactorScores.institutionalWeight },
+                { label: 'Mean Rev.', score: analysis.hybridFactorScores.meanReversionScore, weight: analysis.hybridFactorScores.meanReversionWeight },
+                { label: 'Momentum', score: analysis.hybridFactorScores.momentumScore, weight: analysis.hybridFactorScores.momentumWeight },
+                { label: 'Volume', score: analysis.hybridFactorScores.volumeScore, weight: analysis.hybridFactorScores.volumeWeight },
+              ].map(f => (
+                <div key={f.label} className="bg-gray-700/50 rounded p-2 text-center">
+                  <div className="text-xs text-gray-400 mb-1">{f.label}</div>
+                  <div className={`text-sm font-bold ${ f.score > 0 ? 'text-green-400' : f.score < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                    {f.score > 0 ? '+' : ''}{f.score?.toFixed(2) ?? '—'}
+                  </div>
+                  <div className="text-xs text-gray-500">wt {f.weight}%</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {/* Institutional */}
+            {analysis.hybridComponents.institutional && (
+              <div className="bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs font-semibold text-purple-400 mb-2 uppercase tracking-wide">Institutional Intelligence</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {analysis.hybridComponents.institutional.elliottWave && (
+                    <div><span className="text-gray-500">Elliott Wave </span><span className="text-gray-200">{analysis.hybridComponents.institutional.elliottWave.replace(/_/g, ' ')}</span></div>
+                  )}
+                  {analysis.hybridComponents.institutional.orderBlocks && (
+                    <div><span className="text-gray-500">Order Blocks </span><span className="text-gray-200">{analysis.hybridComponents.institutional.orderBlocks.replace(/_/g, ' ')}</span></div>
+                  )}
+                  {analysis.hybridComponents.institutional.fairValueGaps && (
+                    <div><span className="text-gray-500">FVGs </span><span className="text-gray-200">{analysis.hybridComponents.institutional.fairValueGaps.replace(/_/g, ' ')}</span></div>
+                  )}
+                  {analysis.hybridComponents.institutional.breakOfStructure && (
+                    <div><span className="text-gray-500">BOS </span><span className={`font-medium ${ analysis.hybridComponents.institutional.breakOfStructure.includes('Bullish') ? 'text-green-400' : 'text-red-400'}`}>{analysis.hybridComponents.institutional.breakOfStructure.replace(/_/g, ' ')}</span></div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Mean Reversion */}
+            {analysis.hybridComponents.meanReversion && (
+              <div className="bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wide">Mean Reversion · Bollinger Bands</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div><span className="text-gray-500">Status </span><span className="text-gray-200">{analysis.hybridComponents.meanReversion.bollingerBands}</span></div>
+                  <div><span className="text-gray-500">Upper </span><span className="text-gray-200">₦{Number(analysis.hybridComponents.meanReversion.bollingerUpper).toFixed(2)}</span></div>
+                  <div><span className="text-gray-500">Middle </span><span className="text-gray-200">₦{Number(analysis.hybridComponents.meanReversion.bollingerMiddle).toFixed(2)}</span></div>
+                  <div><span className="text-gray-500">Lower </span><span className="text-gray-200">₦{Number(analysis.hybridComponents.meanReversion.bollingerLower).toFixed(2)}</span></div>
+                  {analysis.hybridComponents.meanReversion.zScore !== undefined && (
+                    <div><span className="text-gray-500">Z-Score </span><span className={`font-medium ${ analysis.hybridComponents.meanReversion.zScoreStatus === 'Overbought' ? 'text-red-400' : analysis.hybridComponents.meanReversion.zScoreStatus === 'Oversold' ? 'text-green-400' : 'text-gray-200'}`}>{Number(analysis.hybridComponents.meanReversion.zScore).toFixed(2)} ({analysis.hybridComponents.meanReversion.zScoreStatus})</span></div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Momentum */}
+            {analysis.hybridComponents.momentum && (
+              <div className="bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs font-semibold text-yellow-400 mb-2 uppercase tracking-wide">Momentum · RSI & MACD</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div><span className="text-gray-500">RSI </span><span className={`font-medium ${ analysis.hybridComponents.momentum.rsiStatus === 'Overbought' ? 'text-red-400' : analysis.hybridComponents.momentum.rsiStatus === 'Oversold' ? 'text-green-400' : 'text-gray-200'}`}>{Number(analysis.hybridComponents.momentum.rsi).toFixed(1)} ({analysis.hybridComponents.momentum.rsiStatus})</span></div>
+                  <div><span className="text-gray-500">MACD Line </span><span className="text-gray-200">{Number(analysis.hybridComponents.momentum.macdLine).toFixed(3)}</span></div>
+                  <div><span className="text-gray-500">Signal </span><span className="text-gray-200">{Number(analysis.hybridComponents.momentum.macdSignal).toFixed(3)}</span></div>
+                  <div><span className="text-gray-500">Histogram </span><span className={`font-medium ${Number(analysis.hybridComponents.momentum.macdHistogram) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{Number(analysis.hybridComponents.momentum.macdHistogram).toFixed(3)}</span></div>
+                  <div><span className="text-gray-500">MACD Status </span><span className="text-gray-200">{analysis.hybridComponents.momentum.macdStatus?.replace(/_/g, ' ')}</span></div>
+                  {analysis.hybridComponents.momentum.rsiDivergenceDetected && (
+                    <div><span className="text-yellow-400">⚠ RSI Divergence </span><span className="text-gray-200">{analysis.hybridComponents.momentum.rsiDivergenceType}</span></div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Volume */}
+            {analysis.hybridComponents.volume && (
+              <div className="bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs font-semibold text-cyan-400 mb-2 uppercase tracking-wide">Volume · VWAP & OBV</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div><span className="text-gray-500">VWAP </span><span className="text-gray-200">{analysis.hybridComponents.volume.vwapStatus?.replace(/_/g, ' ')}</span></div>
+                  <div><span className="text-gray-500">Rel. Volume </span><span className="text-gray-200">{analysis.hybridComponents.volume.relativeVolumeStatus} ({analysis.hybridComponents.volume.relativeVolume}x)</span></div>
+                  <div><span className="text-gray-500">OBV </span><span className="text-gray-200">{analysis.hybridComponents.volume.obvStatus}</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* Market Regime */}
+            {analysis.hybridComponents.regime && (
+              <div className="bg-gray-700/40 rounded-lg p-3">
+                <div className="text-xs font-semibold text-orange-400 mb-2 uppercase tracking-wide">Market Regime</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div><span className="text-gray-500">ATR </span><span className="text-gray-200">{Number(analysis.hybridComponents.regime.atr).toFixed(2)} ({Number(analysis.hybridComponents.regime.atrPercent).toFixed(2)}%)</span></div>
+                  <div><span className="text-gray-500">Volatility </span><span className="text-gray-200">{analysis.hybridComponents.regime.volatilityRegime?.replace(/_/g, ' ')}</span></div>
+                  <div><span className="text-gray-500">ADX </span><span className="text-gray-200">{Number(analysis.hybridComponents.regime.adx).toFixed(1)}</span></div>
+                  <div><span className="text-gray-500">Regime </span><span className="text-gray-200">{analysis.hybridComponents.regime.overallRegime}</span></div>
+                  <div><span className="text-gray-500">Trend </span><span className="text-gray-200">{analysis.hybridComponents.regime.trendDirection}</span></div>
+                  <div><span className="text-gray-500">Strategy </span><span className="text-orange-300 font-medium">{analysis.hybridComponents.regime.recommendedStrategy?.replace(/_/g, ' ')}</span></div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -379,27 +489,9 @@ const AIStockAnalysis = ({ stock }) => {
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="bg-gray-800/50 rounded-lg p-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500">
-          <div className="flex items-center gap-2">
-            <span>Analysis Type: API-Powered AI Analysis</span>
-            {analysis.webDataUsed && (
-              <span className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-400 rounded">
-                <Globe className="w-3 h-3" />
-                Web Search Enabled
-              </span>
-            )}
-          </div>
-          <div>
-            Last Updated: {new Date(analysis.timestamp).toLocaleString()}
-          </div>
-        </div>
-        {analysis.isAI && (
-          <div className="text-xs text-gray-500 mt-2">
-            Powered by: /api/Analysis/comprehensive-report, /api/Prediction/{'{symbol}'}, and /api/Prediction/{'{symbol}'}/sentiment.
-          </div>
-        )}
+      {/* Last updated timestamp — no endpoint attribution shown to users */}
+      <div className="text-xs text-gray-600 text-right px-1">
+        Updated {new Date(analysis.timestamp).toLocaleTimeString()}
       </div>
     </div>
   );

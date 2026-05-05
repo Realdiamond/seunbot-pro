@@ -174,6 +174,9 @@ const NGXDashboard = () => {
     setShowMobileAssetPicker(false)
   }
 
+  // Resolve the full stock object for the selected symbol
+  const selectedStockObj = allStocks.find(s => s.symbol === selectedStock) || null
+
   // Calculate statistics
   const stockCount = allStocks.filter(s => s.type !== 'ETF' && s.sector !== 'ETF').length
   const etfCount = allStocks.filter(s => s.type === 'ETF' || s.sector === 'ETF').length
@@ -196,8 +199,8 @@ const NGXDashboard = () => {
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-              <p className="text-gray-400">Loading 145 NGX stocks + 15 ETFs...</p>
-              <p className="text-xs text-gray-500 mt-2">This may take a few seconds</p>
+              <p className="text-gray-400">Loading NGX market data...</p>
+              <p className="text-xs text-gray-500 mt-2">Fetching live securities from backend</p>
             </div>
           </div>
         </div>
@@ -444,9 +447,9 @@ const NGXDashboard = () => {
           </div>
         </div>
 
-        {/* AI Market Summary - Show at top when in AI Insights mode */}
+        {/* AI Insights - per selected symbol, not market-wide */}
         {viewMode === 'ai-insights' && (
-          <AIMarketSummary stocks={allStocks} />
+          <AIMarketSummary stock={selectedStockObj} />
         )}
 
         {/* Main Content Area */}

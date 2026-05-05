@@ -4,7 +4,7 @@ import axios from 'axios';
 
 class RealNGXDataService {
   constructor() {
-    this.assetsApiBaseUrl = import.meta.env.VITE_SEUNBOT_API_BASE_URL || 'https://seun-bot-4fb16422b74d.herokuapp.com';
+    this.assetsApiBaseUrl = import.meta.env.VITE_SEUNBOT_API_BASE_URL || 'https://seun-trading-bot-api-2026-28f6d6f40e1b.herokuapp.com';
     this.assetsCache = {
       data: null,
       timestamp: 0,
@@ -88,16 +88,29 @@ class RealNGXDataService {
       timeout: 15000
     });
 
-    const assets = Array.isArray(response.data?.data) ? response.data.data : [];
+    const raw = Array.isArray(response.data?.data) ? response.data.data : [];
 
-    this.assetsCache = {
-      data: assets,
-      timestamp: now,
-      ttl: this.assetsCache.ttl
-    };
+    // Deduplicate: API returns both bare symbols (DANGCEM) and NSENG_-prefixed
+    // (NSENG_DANGCEM) for the same stock. Prefer the NSENG_ version (richer metadata).
+    const seen = new Map();
+    for (const asset of raw) {
+      const normalized = this.normalizeAssetSymbol(asset.symbol);
+      if (!normalized) continue;
+      const existing = seen.get(normalized);
+      if (!existing) {
+        seen.set(normalized, asset);
+      } else {
+        const isNseng = String(asset.symbol).startsWith('NSENG_');
+        const existingIsNseng = String(existing.symbol).startsWith('NSENG_');
+        if (isNseng && !existingIsNseng) seen.set(normalized, asset);
+      }
+    }
+    const assets = Array.from(seen.values());
 
+    this.assetsCache = { data: assets, timestamp: now, ttl: this.assetsCache.ttl };
     return assets;
   }
+
 
   extractLivePricesArray(payload) {
     if (Array.isArray(payload)) return payload;
@@ -437,7 +450,7 @@ class RealNGXDataService {
   async getAllStocks() {
     try {
       const [assets, livePrices] = await Promise.all([
-        this.fetchAssets(),
+        this.fetchAssets(),      // already deduplicated
         this.fetchLivePrices()
       ]);
 
@@ -467,6 +480,8 @@ class RealNGXDataService {
     }
   }
 
+
+
   // Clear cache
   clearCache() {
     this.assetsCache.data = null;
@@ -477,12 +492,61 @@ class RealNGXDataService {
     this.verifyCache.clear();
   }
 
+  // ── GET /health ──────────────────────────────────────────────────────────────
+  async healthCheck() {
+    try {
+      const res = await axios.get(`${this.assetsApiBaseUrl}/health`, { timeout: 8000 });
+      return { healthy: true, message: res.data };
+    } catch (err) {
+      console.warn('Health check failed:', err?.message);
+      return { healthy: false, message: err?.message || 'Unreachable' };
+    }
+  }
+
+  // ── GET /api/Prediction/watchlist — returns bare symbol string[] ──────────
+  async fetchWatchlist() {
+    try {
+      const res = await axios.get(`${this.assetsApiBaseUrl}/api/Prediction/watchlist`, { timeout: 15000 });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      console.warn('Watchlist unavailable:', err?.message);
+      return [];
+    }
+  }
+
+  // ── GET /api/Prediction/data-summary — macro DB health view ──────────────
+  async fetchDataSummary() {
+    try {
+      const res = await axios.get(`${this.assetsApiBaseUrl}/api/Prediction/data-summary`, { timeout: 15000 });
+      return res.data;
+    } catch (err) {
+      console.warn('Data summary unavailable:', err?.message);
+      return null;
+    }
+  }
+
   // Get API configuration status
   getAPIStatus() {
     return {
       assetsBaseUrl: this.assetsApiBaseUrl,
       assetsEndpoints: ['/api/Assets', '/api/Assets/live-prices'],
-      predictionFallbackEndpoints: ['/api/Prediction/{symbol}', '/api/Prediction/{symbol}/verify-data'],
+      predictionEndpoints: [
+        '/api/Prediction/{symbol}',
+        '/api/Prediction/watchlist',
+        '/api/Prediction/{symbol}/verify-data',
+        '/api/Prediction/data-summary'
+      ],
+      hybridStrategyEndpoints: [
+        '/api/HybridStrategy/analyze/{NSENG_symbol}',
+        '/api/HybridStrategy/compare/{NSENG_symbol}',
+        '/api/HybridStrategy/assets'
+      ],
+      grokSentimentEndpoints: [
+        '/api/GrokSentiment/stock/{symbol}',
+        '/api/GrokSentiment/sectors',
+        '/api/GrokSentiment/sector/{sector}'
+      ],
+      udfEndpoints: ['/udf/config', '/udf/symbols', '/udf/search', '/udf/history'],
       cacheTTL: this.assetsCache.ttl,
       marketDataProvider: 'SeunBot API'
     };

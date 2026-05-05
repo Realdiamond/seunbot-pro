@@ -2,10 +2,10 @@ import axios from 'axios';
 
 class AIMarketInsightsService {
   constructor() {
-    this.baseUrl = import.meta.env?.VITE_SEUNBOT_API_BASE_URL || 'https://seun-bot-4fb16422b74d.herokuapp.com';
+    this.baseUrl = import.meta.env?.VITE_SEUNBOT_API_BASE_URL || 'https://seun-trading-bot-api-2026-28f6d6f40e1b.herokuapp.com';
     this.cache = new Map();
     this.cacheTtlMs = 2 * 60 * 1000;
-    this.batchChunkSize = 25;
+    this.batchChunkSize = 5; // concurrent prediction calls
   }
 
   normalizeSymbol(symbol = '') {
@@ -13,140 +13,116 @@ class AIMarketInsightsService {
   }
 
   toNsengSymbol(symbol = '') {
-    const normalized = this.normalizeSymbol(symbol);
-    return normalized ? `NSENG_${normalized}` : '';
+    const n = this.normalizeSymbol(symbol);
+    return n ? `NSENG_${n}` : '';
   }
 
   toNumber(value, fallback = null) {
     if (value === null || value === undefined) return fallback;
     if (typeof value === 'string' && value.trim() === '') return fallback;
-
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) ? numericValue : fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
   }
 
   uniqueStrings(values = []) {
-    const cleaned = values
-      .filter((value) => typeof value === 'string')
-      .map((value) => value.trim())
-      .filter(Boolean);
-
-    return Array.from(new Set(cleaned));
+    return Array.from(new Set(
+      values.filter(v => typeof v === 'string').map(v => v.trim()).filter(Boolean)
+    ));
   }
 
   getCached(key) {
-    const cached = this.cache.get(key);
-    if (!cached) return null;
-
-    if ((Date.now() - cached.timestamp) > this.cacheTtlMs) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return cached.data;
+    const c = this.cache.get(key);
+    if (!c) return null;
+    if ((Date.now() - c.timestamp) > this.cacheTtlMs) { this.cache.delete(key); return null; }
+    return c.data;
   }
 
   setCached(key, data) {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now()
-    });
+    this.cache.set(key, { data, timestamp: Date.now() });
   }
 
   mapRecommendation(value) {
-    const text = String(value || '').toUpperCase();
-    if (text.includes('BUY')) return 'Buy';
-    if (text.includes('SELL')) return 'Sell';
+    const t = String(value || '').toUpperCase();
+    if (t.includes('BUY')) return 'Buy';
+    if (t.includes('SELL')) return 'Sell';
     return 'Hold';
   }
 
   mapSentiment(score) {
-    const numericScore = this.toNumber(score, 0);
-    if (numericScore > 0.2) return 'Bullish';
-    if (numericScore < -0.2) return 'Bearish';
+    const n = this.toNumber(score, 0);
+    if (n > 0.2) return 'Bullish';
+    if (n < -0.2) return 'Bearish';
     return 'Neutral';
   }
 
-  mapConfidenceToStars(rawConfidence) {
-    const numericConfidence = this.toNumber(rawConfidence, null);
-    if (numericConfidence === null) return 3;
-
-    const normalized = numericConfidence <= 1 ? (numericConfidence * 5) : numericConfidence;
+  mapConfidenceToStars(raw) {
+    const n = this.toNumber(raw, null);
+    if (n === null) return 3;
+    const normalized = n <= 1 ? n * 5 : n;
     return Math.min(5, Math.max(1, Math.round(normalized)));
   }
 
-  deriveRiskLevel(prediction = {}) {
-    const riskCount = Array.isArray(prediction.risks) ? prediction.risks.length : 0;
-
-    if (prediction.errorMessage) return 'High';
-    if (riskCount >= 5) return 'High';
-    if (riskCount >= 2) return 'Medium';
+  deriveRiskLevel(pred = {}) {
+    const risks = Array.isArray(pred.risks) ? pred.risks.length : 0;
+    if (pred.errorMessage) return 'High';
+    if (risks >= 5) return 'High';
+    if (risks >= 2) return 'Medium';
     return 'Low';
   }
 
-  buildReasoning(prediction = {}) {
-    const keyFactors = Array.isArray(prediction.keyFactors) ? prediction.keyFactors : [];
-    const firstFactor = keyFactors.find((item) => typeof item === 'string' && item.trim());
-    if (firstFactor) {
-      return firstFactor.trim();
-    }
-
-    const sentimentSummary = prediction?.breakdown?.sentimentSummary;
-    if (typeof sentimentSummary === 'string' && sentimentSummary.trim()) {
-      return sentimentSummary.trim();
-    }
-
-    const recommendation = this.mapRecommendation(prediction.recommendation);
-    return `Prediction API currently classifies this symbol as ${recommendation}.`;
+  buildReasoning(pred = {}) {
+    const factors = Array.isArray(pred.keyFactors) ? pred.keyFactors : [];
+    const first = factors.find(f => typeof f === 'string' && f.trim());
+    if (first) return first.trim();
+    const summary = pred?.breakdown?.sentimentSummary;
+    if (typeof summary === 'string' && summary.trim()) return summary.trim();
+    return `Prediction API currently classifies this as ${this.mapRecommendation(pred.recommendation)}.`;
   }
 
-  async fetchPredictionBatchChunk(nsengSymbols = []) {
-    if (!Array.isArray(nsengSymbols) || nsengSymbols.length === 0) return [];
-
-    const response = await axios.get(`${this.baseUrl}/api/Prediction/batch`, {
-      params: {
-        symbols: nsengSymbols.join(',')
-      },
-      timeout: 45000
-    });
-
-    return Array.isArray(response.data) ? response.data : [];
+  // ── GET /api/Prediction/watchlist — returns string[] of bare symbols ─────────
+  async fetchWatchlist() {
+    try {
+      const res = await axios.get(`${this.baseUrl}/api/Prediction/watchlist`, { timeout: 15000 });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      console.warn('Watchlist unavailable:', err?.message);
+      return [];
+    }
   }
 
-  async fetchPredictionBatch(nsengSymbols = []) {
-    const uniqueSymbols = Array.from(
-      new Set(
-        nsengSymbols
-          .map((symbol) => this.toNsengSymbol(symbol))
-          .filter(Boolean)
-      )
-    );
-
-    if (uniqueSymbols.length === 0) return [];
-
-    const allPredictions = [];
-
-    for (let index = 0; index < uniqueSymbols.length; index += this.batchChunkSize) {
-      const chunk = uniqueSymbols.slice(index, index + this.batchChunkSize);
-
-      try {
-        const chunkPredictions = await this.fetchPredictionBatchChunk(chunk);
-        allPredictions.push(...chunkPredictions);
-      } catch (error) {
-        console.warn('Prediction batch chunk failed:', error?.message || error);
-      }
+  // ── GET /api/Prediction/{symbol} — individual call ───────────────────────────
+  async fetchOnePrediction(bareSymbol) {
+    try {
+      const res = await axios.get(`${this.baseUrl}/api/Prediction/${encodeURIComponent(bareSymbol)}`, { timeout: 20000 });
+      return res.data;
+    } catch (err) {
+      console.warn(`Prediction unavailable for ${bareSymbol}:`, err?.message);
+      return null;
     }
+  }
 
-    return allPredictions;
+  // ── Batch individual predictions with concurrency limit ─────────────────────
+  async fetchPredictionBatch(bareSymbols = []) {
+    const unique = Array.from(new Set(bareSymbols.map(s => this.normalizeSymbol(s)).filter(Boolean)));
+    if (unique.length === 0) return [];
+
+    const results = [];
+    for (let i = 0; i < unique.length; i += this.batchChunkSize) {
+      const chunk = unique.slice(i, i + this.batchChunkSize);
+      const settled = await Promise.allSettled(chunk.map(s => this.fetchOnePrediction(s)));
+      settled.forEach(outcome => {
+        if (outcome.status === 'fulfilled' && outcome.value) results.push(outcome.value);
+      });
+    }
+    return results;
   }
 
   createAnalysisItem(prediction = {}, stockBySymbol = new Map()) {
-    const normalizedSymbol = this.normalizeSymbol(prediction.symbol);
-    const mappedStock = stockBySymbol.get(normalizedSymbol);
-
+    const sym = this.normalizeSymbol(prediction.symbol);
+    const stock = stockBySymbol.get(sym);
     return {
-      symbol: normalizedSymbol || this.normalizeSymbol(mappedStock?.symbol || ''),
-      name: mappedStock?.name || prediction.companyName || normalizedSymbol || 'Unknown Asset',
+      symbol: sym || this.normalizeSymbol(stock?.symbol || ''),
+      name: stock?.name || prediction.companyName || sym || 'Unknown Asset',
       recommendation: this.mapRecommendation(prediction.recommendation),
       confidence: this.mapConfidenceToStars(prediction.confidence),
       sentiment: this.mapSentiment(prediction.sentimentScore),
@@ -157,151 +133,77 @@ class AIMarketInsightsService {
     };
   }
 
-  async fetchChatBrief({ totalStocks, bullishStocks, bearishStocks, topBuys, topSells }) {
-    const buyList = (topBuys || []).slice(0, 3).map((item) => item.symbol).join(', ') || 'none';
-    const sellList = (topSells || []).slice(0, 3).map((item) => item.symbol).join(', ') || 'none';
-
-    const message = `Summarize NGX market outlook in exactly 2 concise sentences. Data snapshot: analyzed ${totalStocks} stocks, bullish ${bullishStocks}, bearish ${bearishStocks}, top buys ${buyList}, top sells ${sellList}. Keep it practical for a trader.`;
-
-    try {
-      const response = await axios.post(`${this.baseUrl}/api/Chat`, {
-        message,
-        includeMarketData: true,
-        includeAnalysis: true,
-        includeSentiment: true,
-        maxSources: 4
-      }, {
-        timeout: 25000
-      });
-
-      const chatMessage = typeof response.data?.message === 'string'
-        ? response.data.message.replace(/\s+/g, ' ').trim()
-        : '';
-
-      return chatMessage || null;
-    } catch (error) {
-      console.warn('Chat market brief unavailable:', error?.message || error);
-      return null;
-    }
+  // Chat endpoint is no longer in the backend API — returns null gracefully
+  async fetchChatBrief() {
+    return null;
   }
 
   async getMarketSummary(stocks = []) {
     const stockList = Array.isArray(stocks) ? stocks : [];
+    const bareSymbols = Array.from(new Set(
+      stockList
+        .map(s => this.normalizeSymbol(s?.rawSymbol || s?.symbol))
+        .filter(Boolean)
+    ));
 
-    const nsengSymbols = Array.from(
-      new Set(
-        stockList
-          .map((stock) => stock?.rawSymbol || stock?.symbol)
-          .map((symbol) => this.toNsengSymbol(symbol))
-          .filter(Boolean)
-      )
-    );
-
-    if (nsengSymbols.length === 0) {
+    if (bareSymbols.length === 0) {
       return {
-        totalStocks: 0,
-        buyRecommendations: 0,
-        holdRecommendations: 0,
-        sellRecommendations: 0,
-        bullishStocks: 0,
-        bearishStocks: 0,
-        highRiskStocks: 0,
-        topBuys: [],
-        topSells: [],
-        analyses: [],
-        chatBrief: null,
-        timestamp: new Date().toISOString(),
-        sources: []
+        totalStocks: 0, buyRecommendations: 0, holdRecommendations: 0,
+        sellRecommendations: 0, bullishStocks: 0, bearishStocks: 0,
+        highRiskStocks: 0, topBuys: [], topSells: [], analyses: [],
+        chatBrief: null, timestamp: new Date().toISOString(), sources: []
       };
     }
 
-    const cacheKey = `market-summary:${nsengSymbols.join('|')}`;
+    const cacheKey = `market-summary:${bareSymbols.join('|')}`;
     const cached = this.getCached(cacheKey);
     if (cached) return cached;
 
     const stockBySymbol = new Map();
-    stockList.forEach((stock) => {
-      const normalizedSymbol = this.normalizeSymbol(stock?.rawSymbol || stock?.symbol);
-      if (normalizedSymbol && !stockBySymbol.has(normalizedSymbol)) {
-        stockBySymbol.set(normalizedSymbol, stock);
-      }
+    stockList.forEach(s => {
+      const sym = this.normalizeSymbol(s?.rawSymbol || s?.symbol);
+      if (sym && !stockBySymbol.has(sym)) stockBySymbol.set(sym, s);
     });
 
-    const predictionRows = await this.fetchPredictionBatch(nsengSymbols);
-    if (predictionRows.length === 0) {
-      throw new Error('Prediction batch endpoint unavailable.');
-    }
+    const predictionRows = await this.fetchPredictionBatch(bareSymbols);
+    if (predictionRows.length === 0) throw new Error('Prediction endpoints unavailable.');
 
     const analyses = predictionRows
-      .map((prediction) => this.createAnalysisItem(prediction, stockBySymbol))
-      .filter((item) => Boolean(item.symbol));
+      .map(p => this.createAnalysisItem(p, stockBySymbol))
+      .filter(item => Boolean(item.symbol));
 
-    const buyRecommendations = analyses.filter((item) => item.recommendation === 'Buy').length;
-    const holdRecommendations = analyses.filter((item) => item.recommendation === 'Hold').length;
-    const sellRecommendations = analyses.filter((item) => item.recommendation === 'Sell').length;
-    const bullishStocks = analyses.filter((item) => item.sentiment === 'Bullish').length;
-    const bearishStocks = analyses.filter((item) => item.sentiment === 'Bearish').length;
-    const highRiskStocks = analyses.filter((item) => item.riskLevel === 'High').length;
+    const buyRecommendations = analyses.filter(i => i.recommendation === 'Buy').length;
+    const holdRecommendations = analyses.filter(i => i.recommendation === 'Hold').length;
+    const sellRecommendations = analyses.filter(i => i.recommendation === 'Sell').length;
+    const bullishStocks = analyses.filter(i => i.sentiment === 'Bullish').length;
+    const bearishStocks = analyses.filter(i => i.sentiment === 'Bearish').length;
+    const highRiskStocks = analyses.filter(i => i.riskLevel === 'High').length;
 
     const topBuys = analyses
-      .filter((item) => item.recommendation === 'Buy')
-      .sort((left, right) => {
-        if (right.finalScore !== left.finalScore) {
-          return right.finalScore - left.finalScore;
-        }
-        return right.confidence - left.confidence;
-      })
+      .filter(i => i.recommendation === 'Buy')
+      .sort((a, b) => b.finalScore - a.finalScore || b.confidence - a.confidence)
       .slice(0, 5);
 
     const topSells = analyses
-      .filter((item) => item.recommendation === 'Sell')
-      .sort((left, right) => {
-        if (left.finalScore !== right.finalScore) {
-          return left.finalScore - right.finalScore;
-        }
-        return right.confidence - left.confidence;
-      })
+      .filter(i => i.recommendation === 'Sell')
+      .sort((a, b) => a.finalScore - b.finalScore || b.confidence - a.confidence)
       .slice(0, 5);
-
-    const sortedTimestamps = analyses
-      .map((item) => item.analyzedAt)
-      .filter(Boolean)
-      .sort((left, right) => new Date(right).getTime() - new Date(left).getTime());
-
-    const chatBrief = await this.fetchChatBrief({
-      totalStocks: analyses.length,
-      bullishStocks,
-      bearishStocks,
-      topBuys,
-      topSells
-    });
 
     const result = {
       totalStocks: analyses.length,
-      buyRecommendations,
-      holdRecommendations,
-      sellRecommendations,
-      bullishStocks,
-      bearishStocks,
-      highRiskStocks,
-      topBuys,
-      topSells,
-      analyses,
-      chatBrief,
-      timestamp: sortedTimestamps[0] || new Date().toISOString(),
-      sources: this.uniqueStrings([
-        'Prediction Batch API',
-        chatBrief ? 'Chat API' : ''
-      ])
+      buyRecommendations, holdRecommendations, sellRecommendations,
+      bullishStocks, bearishStocks, highRiskStocks,
+      topBuys, topSells, analyses,
+      chatBrief: null,
+      timestamp: analyses.map(i => i.analyzedAt).filter(Boolean).sort().reverse()[0] || new Date().toISOString(),
+      sources: this.uniqueStrings(['Prediction API (individual calls)'])
     };
 
     this.setCached(cacheKey, result);
     return result;
   }
 
-  clearCache() {
-    this.cache.clear();
-  }
+  clearCache() { this.cache.clear(); }
 }
 
 export default new AIMarketInsightsService();

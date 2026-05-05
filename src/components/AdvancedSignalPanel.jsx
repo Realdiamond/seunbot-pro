@@ -14,7 +14,7 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
   // Enhanced signal data with more details
   const enhancedSignals = useMemo(() => {
     if (!signals || signals.length === 0) return []
-    
+
     return signals.map(signal => ({
       ...signal,
       performance: (Math.random() - 0.3) * 20, // -6% to +14% performance
@@ -46,20 +46,20 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
         if (filters.type === 'Buy' && !isBuySignal) return false
         if (filters.type === 'Sell' && isBuySignal) return false
       }
-      
+
       // Confidence filter
       if ((signal.confidence || 0) < filters.confidence) return false
-      
+
       // Cycle filter
       if (filters.cycle !== 'All' && signal.cyclePhase !== filters.cycle) return false
-      
+
       // Performance filter
       if (filters.performance !== 'All') {
         if (filters.performance === 'Winning' && signal.status !== 'winning') return false
         if (filters.performance === 'Losing' && signal.status !== 'losing') return false
         if (filters.performance === 'Breakeven' && signal.status !== 'active') return false
       }
-      
+
       return true
     }).sort((a, b) => {
       switch (sortBy) {
@@ -136,7 +136,7 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
           <Filter className="h-4 w-4 text-blue-400" />
           <span className="text-blue-400 font-medium">Filters & Sorting</span>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-3">
           <select
             value={filters.type}
@@ -147,7 +147,7 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
             <option value="Buy">Buy Signals</option>
             <option value="Sell">Sell Signals</option>
           </select>
-          
+
           <select
             value={filters.cycle}
             onChange={(e) => setFilters(prev => ({ ...prev, cycle: e.target.value }))}
@@ -159,7 +159,7 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
             <option value="Distribution">Distribution</option>
             <option value="Markdown">Markdown</option>
           </select>
-          
+
           <select
             value={filters.performance}
             onChange={(e) => setFilters(prev => ({ ...prev, performance: e.target.value }))}
@@ -170,7 +170,7 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
             <option value="Losing">Losing</option>
             <option value="Breakeven">Active</option>
           </select>
-          
+
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
@@ -181,7 +181,7 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
             <option value="time">Sort by Time</option>
           </select>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <span className="text-gray-400 text-sm">Min Confidence:</span>
           <input
@@ -210,16 +210,15 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
                 <span className="font-medium text-white">{signal.symbol || 'N/A'}</span>
                 <button
                   onClick={() => toggleWatchlist(`${signal.symbol || 'unknown'}-${index}`)}
-                  className={`p-1 rounded ${
-                    watchlist.has(`${signal.symbol || 'unknown'}-${index}`) 
-                      ? 'text-red-400 hover:text-red-300' 
+                  className={`p-1 rounded ${watchlist.has(`${signal.symbol || 'unknown'}-${index}`)
+                      ? 'text-red-400 hover:text-red-300'
                       : 'text-gray-400 hover:text-red-400'
-                  }`}
+                    }`}
                 >
                   <Heart className={`h-4 w-4 ${watchlist.has(`${signal.symbol || 'unknown'}-${index}`) ? 'fill-current' : ''}`} />
                 </button>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <div className={`text-lg font-bold ${getPerformanceColor(signal.performance)}`}>
                   {signal.performance > 0 ? '+' : ''}{signal.performance.toFixed(1)}%
@@ -259,23 +258,22 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
                 <span className="text-white font-medium">{signal.confidence || 0}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full ${
-                    (signal.confidence || 0) >= 80 ? 'bg-green-400' : 
-                    (signal.confidence || 0) >= 60 ? 'bg-yellow-400' : 'bg-red-400'
-                  }`}
+                <div
+                  className={`h-2 rounded-full ${(signal.confidence || 0) >= 80 ? 'bg-green-400' :
+                      (signal.confidence || 0) >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+                    }`}
                   style={{ width: `${signal.confidence || 0}%` }}
                 ></div>
               </div>
             </div>
           </div>
         ))}
-        
+
         {filteredSignals.length === 0 && (
           <div className="text-center py-8 text-gray-400">
             <Target className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No signals match current filters</p>
-            <button 
+            <button
               onClick={() => setFilters({ type: 'All', confidence: 0, cycle: 'All', performance: 'All' })}
               className="mt-2 text-blue-400 hover:text-blue-300 text-sm"
             >
@@ -297,8 +295,8 @@ const AdvancedSignalPanel = ({ signals, isLoading }) => {
           <div>
             <div className="text-gray-400">Avg Confidence</div>
             <div className="text-blue-400 font-semibold">
-              {enhancedSignals.length > 0 ? 
-                (enhancedSignals.reduce((sum, s) => sum + (s.confidence || 0), 0) / enhancedSignals.length).toFixed(0) + '%' 
+              {enhancedSignals.length > 0 ?
+                (enhancedSignals.reduce((sum, s) => sum + (s.confidence || 0), 0) / enhancedSignals.length).toFixed(0) + '%'
                 : '0%'
               }
             </div>
