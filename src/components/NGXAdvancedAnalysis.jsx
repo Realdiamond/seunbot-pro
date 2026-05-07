@@ -787,7 +787,7 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
       )}
 
       {/* Tabs */}
-      <div className="flex overflow-x-auto hide-scrollbar space-x-1 mb-6 bg-gray-800/50 rounded-lg p-1">
+      <div className="flex flex-nowrap overflow-x-auto hide-scrollbar gap-1 mb-6 bg-gray-800/50 rounded-lg p-1">
         {[
           { id: 'smartMoney', label: 'Smart Money', icon: BarChart3 },
           { id: 'patterns', label: 'Patterns', icon: Triangle },
@@ -802,7 +802,7 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === tab.id
                 ? 'bg-green-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-700'
