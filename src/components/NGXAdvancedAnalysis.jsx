@@ -88,18 +88,23 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
     try {
       // Use real-time data if available
       const stockData = realTimeData || await RealNGXDataService.fetchStockData(selectedStock)
-      
-      // Fetch AI data for the selected stock
-      const aiData = await AIAnalysisEndpointService.analyzeStock({ symbol: selectedStock, price: stockData.price }).catch(() => null)
+      const nsengSymbol = selectedStock.startsWith('NSENG_') ? selectedStock : `NSENG_${selectedStock}`
+      const assetName = stockData.name || selectedStock
+
+      // Fetch AI data and comprehensive report in parallel
+      const [aiData, comprehensiveReport] = await Promise.all([
+        AIAnalysisEndpointService.analyzeStock({ symbol: selectedStock, price: stockData.price }).catch(() => null),
+        AIAnalysisEndpointService.fetchComprehensiveReport(nsengSymbol, assetName).catch(() => null)
+      ])
       
       const comprehensiveAnalysis = {
         smartMoney: generateNGXSmartMoneyAnalysis(stockData, aiData),
-        patterns: null,
+        patterns: comprehensiveReport?.patterns || null,
         elliottWave: generateNGXElliottWave(stockData, aiData),
         volume: generateNGXVolumeAnalysis(stockData, aiData),
         fundamental: generateNGXFundamentalAnalysis(stockData, aiData),
-        cycle: null,
-        gann: null,
+        cycle: comprehensiveReport?.cycle || null,
+        gann: comprehensiveReport?.gann || null,
         planetary: null,
         weeklySetups: null
       }
@@ -878,66 +883,19 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
             <div className="bg-gray-800/30 rounded-lg p-4">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 <Triangle className="h-4 w-4 mr-2 text-blue-400" />
-                Nigerian Geometric Patterns
+                {analysis.patterns.heading}
+                <span className="ml-auto text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded">Seun Weekly Bot</span>
               </h4>
-              
-              {analysis.patterns.nigerian_patterns && analysis.patterns.nigerian_patterns.length > 0 && (
-                <div className="mb-4">
-                  <h5 className="text-blue-400 font-medium mb-2">Nigerian Market Patterns</h5>
-                  {analysis.patterns.nigerian_patterns.map((pattern, index) => (
-                    <div key={index} className="p-3 bg-blue-500/10 border border-blue-500/20 rounded mb-2">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-white font-medium">{pattern.type}</span>
-                        <span className="text-blue-400">{pattern.probability}%</span>
-                      </div>
-                      <div className="text-xs text-gray-300 mb-2">{pattern.description}</div>
-                      <div className="text-xs text-green-400">
-                        Target: ₦{pattern.target.toFixed(2)} | Catalyst: {pattern.catalyst}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {analysis.patterns.triangles && analysis.patterns.triangles.length > 0 && (
-                <div className="mb-4">
-                  <h5 className="text-green-400 font-medium mb-2">Triangle Patterns</h5>
-                  {analysis.patterns.triangles.map((pattern, index) => (
-                    <div key={index} className="p-3 bg-green-500/10 border border-green-500/20 rounded mb-2">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-white font-medium">{pattern.type}</span>
-                        <span className="text-green-400">{pattern.probability}%</span>
-                      </div>
-                      <div className="text-xs text-gray-300 mb-2">{pattern.nigerian_context}</div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>Support: ₦{pattern.support.toFixed(2)}</div>
-                        <div>Resistance: ₦{pattern.resistance.toFixed(2)}</div>
-                        <div>Target: ₦{pattern.breakoutTarget.toFixed(2)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {analysis.patterns.channels && analysis.patterns.channels.length > 0 && (
-                <div className="mb-4">
-                  <h5 className="text-purple-400 font-medium mb-2">Channel Patterns</h5>
-                  {analysis.patterns.channels.map((pattern, index) => (
-                    <div key={index} className="p-3 bg-purple-500/10 border border-purple-500/20 rounded">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-white font-medium">{pattern.type}</span>
-                        <span className="text-purple-400">{pattern.probability}%</span>
-                      </div>
-                      <div className="text-xs text-gray-300 mb-2">{pattern.nigerian_context}</div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>Lower: ₦{pattern.lowerBound.toFixed(2)}</div>
-                        <div>Upper: ₦{pattern.upperBound.toFixed(2)}</div>
-                        <div>Target: ₦{pattern.target.toFixed(2)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-2">
+                {analysis.patterns.bullets.map((bullet, i) => (
+                  <div key={i} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                    bullet.startsWith('  ·') ? 'pl-6 text-gray-400 text-xs' : 'bg-blue-500/5 border border-blue-500/10 text-gray-200'
+                  }`}>
+                    {!bullet.startsWith('  ·') && <span className="text-blue-400 mt-0.5 shrink-0">▸</span>}
+                    <span>{bullet}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1142,51 +1100,19 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
             <div className="bg-gray-800/30 rounded-lg p-4">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 <Clock className="h-4 w-4 mr-2 text-indigo-400" />
-                Nigerian Market Cycles
+                {analysis.cycle.heading}
+                <span className="ml-auto text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">Jenkins/Gann Cycles</span>
               </h4>
-              
-              {analysis.cycle.cycle_position && (
-                <div className="mb-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-indigo-400 font-medium">Current Cycle Position</span>
-                    <span className="text-white font-bold">{analysis.cycle.cycle_position.current_phase}</span>
+              <div className="space-y-2">
+                {analysis.cycle.bullets.map((bullet, i) => (
+                  <div key={i} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                    bullet.startsWith('  ·') ? 'pl-6 text-gray-400 text-xs' : 'bg-indigo-500/5 border border-indigo-500/10 text-gray-200'
+                  }`}>
+                    {!bullet.startsWith('  ·') && <span className="text-indigo-400 mt-0.5 shrink-0">▸</span>}
+                    <span>{bullet}</span>
                   </div>
-                  <div className="text-xs text-gray-300 mb-2">
-                    Duration: {analysis.cycle.cycle_position.phase_duration}
-                  </div>
-                  <div className="text-xs text-indigo-400">
-                    Next Phase: {analysis.cycle.cycle_position.next_phase} ({analysis.cycle.cycle_position.probability}%)
-                  </div>
-                </div>
-              )}
-
-              {analysis.cycle.nigerian_cycles && (
-                <div className="mb-4">
-                  <h5 className="text-white font-medium mb-3">Nigerian Economic Cycles</h5>
-                  <div className="space-y-2">
-                    {Object.entries(analysis.cycle.nigerian_cycles).map(([cycle, description]) => (
-                      <div key={cycle} className="p-2 bg-gray-700/30 rounded">
-                        <div className="text-white text-sm font-medium capitalize">{cycle.replace('_', ' ')}</div>
-                        <div className="text-xs text-gray-300">{description}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {analysis.cycle.seasonal_patterns && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded">
-                  <div className="text-green-400 font-medium text-sm mb-2">Seasonal Patterns</div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                    {Object.entries(analysis.cycle.seasonal_patterns).map(([pattern, description]) => (
-                      <div key={pattern}>
-                        <span className="font-medium capitalize">{pattern.replace('_', ' ')}: </span>
-                        <span>{description}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1197,64 +1123,19 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
             <div className="bg-gray-800/30 rounded-lg p-4">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 <Compass className="h-4 w-4 mr-2 text-amber-400" />
-                Nigerian Gann Analysis
+                {analysis.gann.heading}
+                <span className="ml-auto text-xs text-amber-400 bg-amber-500/10 px-2 py-1 rounded">Seun Weekly Bot</span>
               </h4>
-              
-              {analysis.gann.squareOfNine && (
-                <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-amber-400 font-medium">Square of Nine</span>
-                    <span className="text-white font-bold">{analysis.gann.squareOfNine.currentSquare}</span>
+              <div className="space-y-2">
+                {analysis.gann.bullets.map((bullet, i) => (
+                  <div key={i} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                    bullet.startsWith('  ·') ? 'pl-6 text-gray-400 text-xs' : 'bg-amber-500/5 border border-amber-500/10 text-gray-200'
+                  }`}>
+                    {!bullet.startsWith('  ·') && <span className="text-amber-400 mt-0.5 shrink-0">▸</span>}
+                    <span>{bullet}</span>
                   </div>
-                  <div className="text-xs text-gray-300 mb-2">
-                    Next Square: {analysis.gann.squareOfNine.nextSquare}
-                  </div>
-                  <div className="text-xs text-amber-400">
-                    {analysis.gann.squareOfNine.nigerian_context}
-                  </div>
-                </div>
-              )}
-
-              {analysis.gann.gannLevels && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-300 mb-2">Support Levels</div>
-                    <div className="space-y-1">
-                      {analysis.gann.gannLevels.support.map((level, index) => (
-                        <div key={index} className="flex justify-between text-xs">
-                          <span className="text-gray-400">Level {index + 1}:</span>
-                          <span className="text-green-400">₦{level.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-300 mb-2">Resistance Levels</div>
-                    <div className="space-y-1">
-                      {analysis.gann.gannLevels.resistance.map((level, index) => (
-                        <div key={index} className="flex justify-between text-xs">
-                          <span className="text-gray-400">Level {index + 1}:</span>
-                          <span className="text-red-400">₦{level.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {analysis.gann.gannLevels?.timeTargets && (
-                <div className="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded">
-                  <div className="text-cyan-400 font-medium text-sm mb-2">Time Targets</div>
-                  <div className="grid grid-cols-3 gap-2 text-xs text-gray-300">
-                    {analysis.gann.gannLevels.timeTargets.map((target, index) => (
-                      <div key={index} className="text-center">
-                        <div className="text-cyan-400">Target {index + 1}</div>
-                        <div>{target}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           </div>
         )}

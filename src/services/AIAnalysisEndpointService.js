@@ -178,7 +178,55 @@ class AIAnalysisEndpointService {
     }
   }
 
+  // ── POST /api/Analysis/comprehensive-report/{symbol} ────────────────────────
+  // Returns a text report with Patterns, Cycle, Gann sections
+  async fetchComprehensiveReport(nsengSymbol, assetName) {
+    const cacheKey = `comprehensive_${nsengSymbol}`;
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+    try {
+      const res = await axios.post(
+        `${this.baseUrl}/api/Analysis/comprehensive-report/${encodeURIComponent(nsengSymbol)}?assetName=${encodeURIComponent(assetName || nsengSymbol)}&exchange=NGX`,
+        {},
+        { timeout: 60000, headers: { 'Content-Type': 'application/json' } }
+      );
+      const data = res.data;
+      if (!data || !data.report) return null;
+      const parsed = {
+        raw: data.report,
+        patterns: this.parseReportSection(data.report, 'Geometric Patterns', ['Predictive Cycle']),
+        cycle: this.parseReportSection(data.report, 'Predictive Cycle Analysis', ['Summary', '┌']),
+        gann: this.parseReportSection(data.report, 'Jenkins/Gann Cycle', ['Summary', '┌', 'Gann:']),
+      };
+      this.setCached(cacheKey, parsed);
+      return parsed;
+    } catch (err) {
+      console.warn(`ComprehensiveReport unavailable for ${nsengSymbol}:`, err?.message);
+      return null;
+    }
+  }
+
+  // Extract a named section from the report text
+  parseReportSection(report, startMarker, endMarkers = []) {
+    if (!report) return null;
+    const startIdx = report.indexOf(startMarker);
+    if (startIdx === -1) return null;
+    let endIdx = report.length;
+    for (const marker of endMarkers) {
+      const idx = report.indexOf(marker, startIdx + startMarker.length);
+      if (idx !== -1 && idx < endIdx) endIdx = idx;
+    }
+    const raw = report.slice(startIdx, endIdx).trim();
+    // Convert tab-bullet lines into array of bullet strings
+    const bullets = raw
+      .split('\n')
+      .map(l => l.replace(/^\t•\t/, '').replace(/^\t\t-\s*/, '  · ').trim())
+      .filter(Boolean);
+    return { heading: bullets[0] || startMarker, bullets: bullets.slice(1) };
+  }
+
   // ── Main: fires all 3 in parallel ──────────────────────────────────────────
+
   async analyzeStock(stock) {
     const normalized = this.normalizeSymbol(stock?.rawSymbol || stock?.symbol || '');
     if (!normalized) throw new Error('Stock symbol is required for AI analysis.');
