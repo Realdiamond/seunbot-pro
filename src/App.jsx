@@ -9,8 +9,8 @@ import NGXAdvancedAnalysis from './components/NGXAdvancedAnalysis'
 import NGXWeeklySetupsPanel from './components/NGXWeeklySetupsPanel'
 import './App.css'
 
-const TradingDashboard = lazy(() => import('./components/TradingDashboard'))
-const SeunBotAnalysis = lazy(() => import('./components/SeunBotAnalysis'))
+const CryptoDashboard  = lazy(() => import('./components/crypto/CryptoDashboard'))
+const CryptoAnalysis   = lazy(() => import('./components/crypto/CryptoAnalysis'))
 const SP500Dashboard = lazy(() => import('./components/SP500Dashboard'))
 const SP500AdvancedAnalysis = lazy(() => import('./components/SP500AdvancedAnalysis'))
 const SP500WeeklySetupsPanel = lazy(() => import('./components/SP500WeeklySetupsPanel'))
@@ -34,6 +34,7 @@ function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentMarket, setCurrentMarket] = useState(defaultMarket)
+  const [selectedCryptoPair, setSelectedCryptoPair] = useState('BTCUSDT')
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -243,8 +244,8 @@ function App() {
                 {/* Crypto Routes */}
                 {hasCrypto ? (
                   <>
-                    <Route path="/" element={<TradingDashboard />} />
-                    <Route path="/crypto-analysis" element={<SeunBotAnalysis />} />
+                    <Route path="/" element={<CryptoDashboard onSelectPair={setSelectedCryptoPair} />} />
+                    <Route path="/crypto-analysis" element={<CryptoAnalysis initialSymbol={selectedCryptoPair} />} />
                   </>
                 ) : (
                   <Route path="/" element={<Navigate to={fallbackRoute} replace />} />
