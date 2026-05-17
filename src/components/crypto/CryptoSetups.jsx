@@ -6,7 +6,7 @@ import CoinBadge from './CoinBadge'
 
 export default function CryptoSetups() {
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(100)
+  const [pageSize, setPageSize] = useState(25)
   const [directionFilter, setDirectionFilter] = useState('All') // All, BUY, SELL
   const [setupFilter, setSetupFilter] = useState('All') // All, Bull, Bear, Neutral
 
@@ -91,12 +91,12 @@ export default function CryptoSetups() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-900/50 border-b border-gray-700">
-                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm">Asset</th>
-                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm">Signal</th>
-                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm">Strength</th>
-                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm">Weekly Setup</th>
-                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm">Pattern</th>
-                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm">Elliott Wave</th>
+                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm w-[18%]">Asset</th>
+                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm w-[12%]">Signal</th>
+                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm w-[15%]">Strength</th>
+                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm w-[15%] whitespace-nowrap">Weekly Setup</th>
+                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm w-[20%]">Pattern</th>
+                <th className="text-left py-4 px-5 text-gray-400 font-medium text-sm w-[20%]">Elliott Wave</th>
               </tr>
             </thead>
             <tbody>
@@ -161,6 +161,30 @@ export default function CryptoSetups() {
           </table>
         </div>
       </div>
+
+      {data?.metadata && data.metadata.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-2">
+          <div className="text-sm text-gray-400">
+            Showing page {data.metadata.page} of {data.metadata.totalPages} ({data.metadata.totalItems} total setups)
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium text-white disabled:opacity-50 transition-colors"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage(p => Math.min(data.metadata.totalPages, p + 1))}
+              disabled={page === data.metadata.totalPages || loading}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm font-medium text-white disabled:opacity-50 transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
