@@ -33,8 +33,17 @@ function App() {
   const hasSp500 = enabledMarkets.includes('sp500')
   const defaultMarket = hasCrypto ? 'crypto' : hasNgx ? 'ngx' : enabledMarkets[0]
 
+  const getInitialMarket = () => {
+    if (typeof window === 'undefined') return defaultMarket
+    const path = window.location.pathname
+    if (path.startsWith('/ngx') && hasNgx) return 'ngx'
+    if (path.startsWith('/sp500') && hasSp500) return 'sp500'
+    if (hasCrypto) return 'crypto'
+    return defaultMarket
+  }
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [currentMarket, setCurrentMarket] = useState(defaultMarket)
+  const [currentMarket, setCurrentMarket] = useState(getInitialMarket())
   const [selectedCryptoPair, setSelectedCryptoPair] = useState('BTCUSDT')
 
   const toggleSidebar = () => {
