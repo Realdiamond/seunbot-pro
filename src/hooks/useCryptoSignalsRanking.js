@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 
-const BASE = import.meta.env.VITE_SEUNBOT_API_BASE_URL || 'https://seun-trading-bot-api-2026-28f6d6f40e1b.herokuapp.com'
-
 export function useCryptoSignalsRanking(page = 1, pageSize = 50) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -11,7 +9,7 @@ export function useCryptoSignalsRanking(page = 1, pageSize = 50) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${BASE}/api/CryptoAnalysis/dashboard/signals/ranking?page=${page}&pageSize=${pageSize}`)
+      const res = await fetch(`/api/CryptoAnalysis/dashboard/signals/ranking?page=${page}&pageSize=${pageSize}`)
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const json = await res.json()
       setData(json)
