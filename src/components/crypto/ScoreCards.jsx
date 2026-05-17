@@ -24,7 +24,7 @@ function ScoreBar({ label, value, weight, max = 5 }) {
 }
 
 export default function ScoreCards({ analysis }) {
-  const { direction, finalScore, isStrongSignal, overallMtfSignal, scores, currentPrice } = analysis
+  const { direction, finalScore, signalStrength, isStrongSignal, overallMtfSignal, scores, currentPrice } = analysis
   const sStyle = signalStyle(overallMtfSignal)
   const dirUp  = direction === 'BUY'
 
@@ -48,11 +48,16 @@ export default function ScoreCards({ analysis }) {
           )}
         </div>
 
-        <div className="text-sm text-gray-400">
-          Score: <span className={`font-bold ${finalScore >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {finalScore >= 0 ? '+' : ''}{(finalScore ?? 0).toFixed(2)}
-          </span>
-          <span className="text-gray-600 ml-2">(strong ≥ 4.0)</span>
+        <div className="text-sm text-gray-400 flex items-center gap-3">
+          <div>
+            Score: <span className={`font-bold ${finalScore >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {finalScore >= 0 ? '+' : ''}{(finalScore ?? 0).toFixed(2)}
+            </span>
+          </div>
+          <div className="w-px h-3 bg-gray-700"></div>
+          <div>
+            Strength: <span className="text-white font-semibold">{(signalStrength ?? 0).toFixed(1)}/10</span>
+          </div>
         </div>
 
         <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-semibold ${sStyle.bg} ${sStyle.border} ${sStyle.text}`}>

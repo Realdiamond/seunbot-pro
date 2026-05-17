@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Brain, RefreshCw, Clock } from 'lucide-react'
 import { useCryptoPairs }    from '../../hooks/useCryptoPairs'
 import { useCryptoAnalysis } from '../../hooks/useCryptoAnalysis'
@@ -10,13 +11,21 @@ import MultiTimeframe   from './MultiTimeframe'
 import CyclePanel       from './CyclePanel'
 import TradePlan        from './TradePlan'
 import SignalsList      from './SignalsList'
+import CryptoPatterns   from './CryptoPatterns'
 import { coinSymbol }   from './utils'
 
 const INTERVALS = ['1m','5m','15m','1h','4h','1d']
 
 export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
-  const [symbol,   setSymbol]   = useState(initialSymbol)
+  const location = useLocation()
+  const routeSymbol = location.state?.symbol
+
+  const [symbol,   setSymbol]   = useState(routeSymbol || initialSymbol)
   const [interval, setInterval] = useState('1d')
+
+  useEffect(() => {
+    if (routeSymbol) setSymbol(routeSymbol)
+  }, [routeSymbol])
 
   const { pairs } = useCryptoPairs()
   const { analysis, loading, syncing, syncProgress, error, refetch } = useCryptoAnalysis(symbol, interval)
@@ -104,10 +113,16 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
             <IndicatorsPanel analysis={analysis} />
           </div>
 
-          {/* 3 — Multi-timeframe */}
-          <div>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Multi-Timeframe</h2>
-            <MultiTimeframe analysis={analysis} />
+          {/* 3 — Multi-timeframe & Patterns */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Multi-Timeframe</h2>
+              <MultiTimeframe analysis={analysis} />
+            </div>
+            <div>
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Structure</h2>
+              <CryptoPatterns analysis={analysis} />
+            </div>
           </div>
 
           {/* 4 — Cycle + Trade plan side by side */}

@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useMemo, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import {
   BarChart3, Globe, MapPin, Target,
   Menu, X, Home, Brain, DollarSign
@@ -11,6 +11,7 @@ import './App.css'
 
 const CryptoDashboard  = lazy(() => import('./components/crypto/CryptoDashboard'))
 const CryptoAnalysis   = lazy(() => import('./components/crypto/CryptoAnalysis'))
+const CryptoSetups     = lazy(() => import('./components/crypto/CryptoSetups'))
 const SP500Dashboard = lazy(() => import('./components/SP500Dashboard'))
 const SP500AdvancedAnalysis = lazy(() => import('./components/SP500AdvancedAnalysis'))
 const SP500WeeklySetupsPanel = lazy(() => import('./components/SP500WeeklySetupsPanel'))
@@ -30,7 +31,7 @@ function App() {
   const hasCrypto = enabledMarkets.includes('crypto')
   const hasNgx = enabledMarkets.includes('ngx')
   const hasSp500 = enabledMarkets.includes('sp500')
-  const defaultMarket = hasNgx ? 'ngx' : enabledMarkets[0]
+  const defaultMarket = hasCrypto ? 'crypto' : hasNgx ? 'ngx' : enabledMarkets[0]
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentMarket, setCurrentMarket] = useState(defaultMarket)
@@ -48,7 +49,7 @@ function App() {
 
   const activeMarket = enabledMarkets.includes(currentMarket) ? currentMarket : defaultMarket
   const marketSelectorCols = enabledMarkets.length >= 3 ? 'grid-cols-3' : enabledMarkets.length === 2 ? 'grid-cols-2' : 'grid-cols-1'
-  const fallbackRoute = hasNgx ? '/ngx' : hasCrypto ? '/' : '/sp500'
+  const fallbackRoute = hasCrypto ? '/' : hasNgx ? '/ngx' : '/sp500'
 
   return (
     <Router>
@@ -127,76 +128,105 @@ function App() {
             <nav className="flex-1 p-4 space-y-2">
               {activeMarket === 'crypto' && hasCrypto ? (
                 <>
-                  <Link
+                  <NavLink
                     to="/"
+                    end
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-blue-600/20 text-blue-400 font-semibold border border-blue-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <Home className="h-5 w-5" />
                     <span>Crypto Dashboard</span>
-                  </Link>
-                  <Link
+                  </NavLink>
+                  <NavLink
                     to="/crypto-analysis"
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-blue-600/20 text-blue-400 font-semibold border border-blue-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <Brain className="h-5 w-5" />
                     <span>Advanced Analysis</span>
-                  </Link>
+                  </NavLink>
+                  <NavLink
+                    to="/crypto-setups"
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-blue-600/20 text-blue-400 font-semibold border border-blue-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <Target className="h-5 w-5" />
+                    <span>Weekly Setups</span>
+                  </NavLink>
                 </>
               ) : activeMarket === 'sp500' && hasSp500 ? (
                 <>
-                  <Link
+                  <NavLink
                     to="/sp500"
+                    end
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-purple-600/20 text-purple-400 font-semibold border border-purple-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <BarChart3 className="h-5 w-5" />
                     <span>S&P 500 Dashboard</span>
-                  </Link>
-                  <Link
+                  </NavLink>
+                  <NavLink
                     to="/sp500-analysis"
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-purple-600/20 text-purple-400 font-semibold border border-purple-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <Brain className="h-5 w-5" />
                     <span>Stock Analysis</span>
-                  </Link>
-                  <Link
+                  </NavLink>
+                  <NavLink
                     to="/sp500-setups"
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-purple-600/20 text-purple-400 font-semibold border border-purple-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <Target className="h-5 w-5" />
                     <span>Weekly Setups</span>
-                  </Link>
+                  </NavLink>
                 </>
               ) : (
                 <>
-                  <Link
+                  <NavLink
                     to="/ngx"
+                    end
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-green-600/20 text-green-400 font-semibold border border-green-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <BarChart3 className="h-5 w-5" />
                     <span>NGX Dashboard</span>
-                  </Link>
-                  <Link
+                  </NavLink>
+                  <NavLink
                     to="/ngx-analysis"
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-green-600/20 text-green-400 font-semibold border border-green-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <Brain className="h-5 w-5" />
                     <span>Advanced Analysis</span>
-                  </Link>
-                  <Link
+                  </NavLink>
+                  <NavLink
                     to="/ngx-setups"
                     onClick={() => setSidebarOpen(false)}
-                    className="flex items-center space-x-3 p-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-green-600/20 text-green-400 font-semibold border border-green-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
                   >
                     <Target className="h-5 w-5" />
                     <span>Weekly Setups</span>
-                  </Link>
+                  </NavLink>
                 </>
               )}
             </nav>
@@ -246,6 +276,7 @@ function App() {
                   <>
                     <Route path="/" element={<CryptoDashboard onSelectPair={setSelectedCryptoPair} />} />
                     <Route path="/crypto-analysis" element={<CryptoAnalysis initialSymbol={selectedCryptoPair} />} />
+                    <Route path="/crypto-setups" element={<CryptoSetups />} />
                   </>
                 ) : (
                   <Route path="/" element={<Navigate to={fallbackRoute} replace />} />
