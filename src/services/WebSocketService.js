@@ -1,6 +1,6 @@
 // WebSocket Service for Real-Time Price Streaming
 // External WebSocket providers (Polygon.io, TwelveData) have been removed.
-// S&P 500 uses fixed fallback data only (no live WS).
+// US Stocks uses HTTP polling against the SeunBot backend.
 // NGX uses HTTP polling against the SeunBot Heroku backend.
 
 class WebSocketService {
@@ -19,11 +19,10 @@ class WebSocketService {
 
   async connect(marketType, symbols = []) {
     this.marketType = marketType;
-    // Only NGX uses polling against our backend; SP500 has no live source
-    if (marketType === 'ngx') {
+    // Only NGX and US Stocks use polling against our backend
+    if (marketType === 'ngx' || marketType === 'usstocks') {
       this._startPolling(symbols);
     } else {
-      // SP500 / other markets: no external WS available, use polling fallback
       this._startPolling(symbols);
     }
   }
@@ -124,9 +123,9 @@ class WebSocketService {
               sources: stock.sources
             });
           });
-        } else if (this.marketType === 'sp500') {
-          const { default: SP500DataService } = await import('./SP500DataService');
-          const results = await SP500DataService.fetchBatchStocks(symbols.slice(0, 20));
+        } else if (this.marketType === 'usstocks') {
+          const { default: USStocksDataService } = await import('./USStocksDataService');
+          const results = await USStocksDataService.fetchMultipleStocks(symbols);
           results.forEach(stock => {
             this._handlePriceUpdate({
               symbol: stock.symbol,
@@ -139,7 +138,8 @@ class WebSocketService {
               change: stock.change,
               changePercent: stock.changePercent,
               timestamp: Date.now(),
-              source: 'Fallback Data'
+              source: 'SeunBot API Polling',
+              sources: stock.sources
             });
           });
         }
@@ -196,8 +196,8 @@ class WebSocketService {
   }
 }
 
-// Export separate instances for SP500 and NGX to avoid conflicts
-export const sp500WebSocket = new WebSocketService();
+// Export separate instances for US Stocks and NGX to avoid conflicts
+export const usStocksWebSocket = new WebSocketService();
 export const ngxWebSocket = new WebSocketService();
 
 export default WebSocketService;

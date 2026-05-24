@@ -12,9 +12,9 @@ import './App.css'
 const CryptoDashboard  = lazy(() => import('./components/crypto/CryptoDashboard'))
 const CryptoAnalysis   = lazy(() => import('./components/crypto/CryptoAnalysis'))
 const CryptoSetups     = lazy(() => import('./components/crypto/CryptoSetups'))
-const SP500Dashboard = lazy(() => import('./components/SP500Dashboard'))
-const SP500AdvancedAnalysis = lazy(() => import('./components/SP500AdvancedAnalysis'))
-const SP500WeeklySetupsPanel = lazy(() => import('./components/SP500WeeklySetupsPanel'))
+const USStocksDashboard = lazy(() => import('./components/USStocksDashboard'))
+const USStocksAdvancedAnalysis = lazy(() => import('./components/USStocksAdvancedAnalysis'))
+const USStocksWeeklySetupsPanel = lazy(() => import('./components/USStocksWeeklySetupsPanel'))
 
 function App() {
   const enabledMarkets = useMemo(() => {
@@ -24,20 +24,20 @@ function App() {
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean)
 
-    const valid = requested.filter((value) => ['crypto', 'ngx', 'sp500'].includes(value))
+    const valid = requested.filter((value) => ['crypto', 'ngx', 'usstocks'].includes(value))
     return valid.length > 0 ? Array.from(new Set(valid)) : ['ngx']
   }, [])
 
   const hasCrypto = enabledMarkets.includes('crypto')
   const hasNgx = enabledMarkets.includes('ngx')
-  const hasSp500 = enabledMarkets.includes('sp500')
+  const hasUsStocks = enabledMarkets.includes('usstocks')
   const defaultMarket = hasCrypto ? 'crypto' : hasNgx ? 'ngx' : enabledMarkets[0]
 
   const getInitialMarket = () => {
     if (typeof window === 'undefined') return defaultMarket
     const path = window.location.pathname
     if (path.startsWith('/ngx') && hasNgx) return 'ngx'
-    if (path.startsWith('/sp500') && hasSp500) return 'sp500'
+    if (path.startsWith('/usstocks') && hasUsStocks) return 'usstocks'
     if (hasCrypto) return 'crypto'
     return defaultMarket
   }
@@ -58,7 +58,7 @@ function App() {
 
   const activeMarket = enabledMarkets.includes(currentMarket) ? currentMarket : defaultMarket
   const marketSelectorCols = enabledMarkets.length >= 3 ? 'grid-cols-3' : enabledMarkets.length === 2 ? 'grid-cols-2' : 'grid-cols-1'
-  const fallbackRoute = hasCrypto ? '/' : hasNgx ? '/ngx' : '/sp500'
+  const fallbackRoute = hasCrypto ? '/' : hasNgx ? '/ngx' : '/usstocks'
 
   return (
     <Router>
@@ -117,17 +117,17 @@ function App() {
                   NGX
                 </button>
                 )}
-                {hasSp500 && (
+                {hasUsStocks && (
                 <button
-                  onClick={() => switchMarket('sp500')}
+                  onClick={() => switchMarket('usstocks')}
                   className={`p-3 rounded-lg text-xs font-medium transition-colors ${
-                    activeMarket === 'sp500'
+                    activeMarket === 'usstocks'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}
                 >
                   <DollarSign className="h-4 w-4 mx-auto mb-1" />
-                  S&P 500
+                  US Stocks
                 </button>
                 )}
               </div>
@@ -169,10 +169,10 @@ function App() {
                     <span>Weekly Setups</span>
                   </NavLink>
                 </>
-              ) : activeMarket === 'sp500' && hasSp500 ? (
+              ) : activeMarket === 'usstocks' && hasUsStocks ? (
                 <>
                   <NavLink
-                    to="/sp500"
+                    to="/usstocks"
                     end
                     onClick={() => setSidebarOpen(false)}
                     className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
@@ -180,10 +180,10 @@ function App() {
                     }`}
                   >
                     <BarChart3 className="h-5 w-5" />
-                    <span>S&P 500 Dashboard</span>
+                    <span>US Stocks Dashboard</span>
                   </NavLink>
                   <NavLink
-                    to="/sp500-analysis"
+                    to="/usstocks-analysis"
                     onClick={() => setSidebarOpen(false)}
                     className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
                       isActive ? 'bg-purple-600/20 text-purple-400 font-semibold border border-purple-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -193,7 +193,7 @@ function App() {
                     <span>Stock Analysis</span>
                   </NavLink>
                   <NavLink
-                    to="/sp500-setups"
+                    to="/usstocks-setups"
                     onClick={() => setSidebarOpen(false)}
                     className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
                       isActive ? 'bg-purple-600/20 text-purple-400 font-semibold border border-purple-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -248,7 +248,7 @@ function App() {
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-green-400 text-sm">Crypto Markets Open</span>
                 </div>
-              ) : activeMarket === 'sp500' && hasSp500 ? (
+              ) : activeMarket === 'usstocks' && hasUsStocks ? (
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-green-400 text-sm">US Markets Open</span>
@@ -308,12 +308,12 @@ function App() {
                   </>
                 )}
 
-                {/* S&P 500 Routes */}
-                {hasSp500 && (
+                {/* US Stocks Routes */}
+                {hasUsStocks && (
                   <>
-                    <Route path="/sp500" element={<SP500Dashboard />} />
-                    <Route path="/sp500-analysis" element={<SP500AdvancedAnalysis />} />
-                    <Route path="/sp500-setups" element={<SP500WeeklySetupsPanel />} />
+                    <Route path="/usstocks" element={<USStocksDashboard />} />
+                    <Route path="/usstocks-analysis" element={<USStocksAdvancedAnalysis />} />
+                    <Route path="/usstocks-setups" element={<USStocksWeeklySetupsPanel />} />
                   </>
                 )}
 

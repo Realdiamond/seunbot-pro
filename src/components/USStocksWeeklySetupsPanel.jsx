@@ -5,9 +5,9 @@ import {
   DollarSign, Percent, Eye, RefreshCw, Star, Filter,
   ArrowUp, ArrowDown, Calendar, Bell
 } from 'lucide-react'
-import SP500DataService from '../services/SP500DataService'
+import USStocksDataService from '../services/USStocksDataService'
 
-const SP500WeeklySetupsPanel = () => {
+const USStocksWeeklySetupsPanel = () => {
   const [weeklySetups, setWeeklySetups] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectedSector, setSelectedSector] = useState('All')
@@ -30,7 +30,7 @@ const SP500WeeklySetupsPanel = () => {
   const loadWeeklySetups = async () => {
     setLoading(true)
     try {
-      const stocks = await SP500DataService.getAllStocks()
+      const stocks = await USStocksDataService.getAllStocks()
       const setups = await generateWeeklySetups(stocks)
       setWeeklySetups(setups)
     } catch (error) {
@@ -46,7 +46,7 @@ const SP500WeeklySetupsPanel = () => {
     for (const stock of stocks) {
       // Generate historical data for analysis
       const historicalData = generateHistoricalData(stock, 50)
-      const seunBotSignals = SP500DataService.calculateSeunBotSignals(stock, historicalData)
+      const seunBotSignals = USStocksDataService.calculateSeunBotSignals(stock, historicalData)
       
       // Only include high probability setups
       if (seunBotSignals.strength >= 3) {
@@ -173,12 +173,12 @@ const SP500WeeklySetupsPanel = () => {
       <div className="bg-gray-800 rounded-lg p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Target className="h-5 w-5 text-orange-500 animate-pulse" />
-          <h3 className="text-lg font-semibold text-white">S&P 500 Weekly High Probability Setups</h3>
+          <h3 className="text-lg font-semibold text-white">US Stocks Weekly High Probability Setups</h3>
         </div>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Scanning S&P 500 stocks with SeunBot intelligence...</p>
+            <p className="text-gray-400">Scanning US Stocks with SeunBot intelligence...</p>
             <p className="text-sm text-gray-500">Analyzing RSI, MACD, volume, and technical patterns</p>
           </div>
         </div>
@@ -192,7 +192,7 @@ const SP500WeeklySetupsPanel = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <Target className="h-5 w-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">S&P 500 Weekly High Probability Setups</h3>
+          <h3 className="text-lg font-semibold text-white">US Stocks Weekly High Probability Setups</h3>
           <div className="px-2 py-1 bg-orange-500/20 rounded text-xs text-orange-400">
             {weeklySetups?.highProbabilityCount || 0} Setups Found
           </div>
@@ -219,7 +219,7 @@ const SP500WeeklySetupsPanel = () => {
             <span className="text-green-400 font-medium text-sm">Total Scanned</span>
           </div>
           <div className="text-white text-xl font-bold">{weeklySetups?.totalScanned || 0}</div>
-          <div className="text-xs text-gray-400">S&P 500 Stocks</div>
+          <div className="text-xs text-gray-400">US Stocks</div>
         </div>
 
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
@@ -484,7 +484,7 @@ const SP500WeeklySetupsPanel = () => {
           <div className="p-3 bg-green-500/10 border border-green-500/20 rounded">
             <div className="text-green-400 font-medium text-sm mb-2">Market Sentiment</div>
             <div className="text-white">Bullish</div>
-            <div className="text-xs text-gray-400">Fed policy supporting markets</div>
+            <div className="text-xs text-gray-400">Fed policy supporting US markets</div>
           </div>
           
           <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
@@ -504,4 +504,4 @@ const SP500WeeklySetupsPanel = () => {
   )
 }
 
-export default SP500WeeklySetupsPanel
+export default USStocksWeeklySetupsPanel

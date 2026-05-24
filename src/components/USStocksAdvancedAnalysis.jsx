@@ -6,10 +6,10 @@ import {
   Triangle, Square, Circle, Hexagon, Diamond, Star,
   Globe, Calendar, Moon, Sun, Compass, Orbit
 } from 'lucide-react'
-import SP500DataService from '../services/SP500DataService'
-import { sp500WebSocket } from '../services/WebSocketService'
+import USStocksDataService from '../services/USStocksDataService'
+import { usStocksWebSocket } from '../services/WebSocketService'
 
-const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
+const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
   const [activeTab, setActiveTab] = useState('smartMoney')
   const [selectedTimeframe, setSelectedTimeframe] = useState('1D')
   const [analysis, setAnalysis] = useState(null)
@@ -35,9 +35,9 @@ const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => 
 
   useEffect(() => {
     // Subscribe to the selected stock via WebSocket
-    sp500WebSocket.subscribe(selectedStock, handleWsUpdate)
+    usStocksWebSocket.subscribe(selectedStock, handleWsUpdate)
     return () => {
-      sp500WebSocket.unsubscribe(selectedStock, handleWsUpdate)
+      usStocksWebSocket.unsubscribe(selectedStock, handleWsUpdate)
     }
   }, [selectedStock, handleWsUpdate])
 
@@ -56,7 +56,7 @@ const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => 
   const loadRealTimeData = async () => {
     try {
       console.log(`📈 Fetching real-time data for ${selectedStock}...`)
-      const data = stockData || await SP500DataService.fetchStockData(selectedStock)
+      const data = stockData || await USStocksDataService.fetchStockData(selectedStock)
       setRealTimeData(data)
       setDataSource(data.isMock ? '⚠️ Simulated Data' : `✅ Live Data (${data.sources.join(', ')})`)
       console.log('✅ Real-time data loaded:', data)
@@ -70,11 +70,11 @@ const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => 
     setLoading(true)
     
     try {
-      const data = realTimeData || stockData || await SP500DataService.fetchStockData(selectedStock)
+      const data = realTimeData || stockData || await USStocksDataService.fetchStockData(selectedStock)
       
       // Calculate SEUN BOT signals with historical data simulation
       const historicalData = generateHistoricalData(data, 50)
-      const seunBotSignals = SP500DataService.calculateSeunBotSignals(data, historicalData)
+      const seunBotSignals = USStocksDataService.calculateSeunBotSignals(data, historicalData)
       
       const comprehensiveAnalysis = {
         smartMoney: generateSmartMoneyAnalysis(data, seunBotSignals),
@@ -716,7 +716,7 @@ const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => 
         ))}
       </div>
 
-      {/* Tab Content - Similar structure to NGX but adapted for S&P 500 */}
+      {/* Tab Content */}
       <div className="space-y-4">
         {activeTab === 'smartMoney' && analysis?.smartMoney && (
           <div className="space-y-4">
@@ -735,11 +735,9 @@ const SP500AdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => 
             </div>
           </div>
         )}
-        
-        {/* Add other tabs similar to NGX but with S&P 500 specific content */}
       </div>
     </div>
   )
 }
 
-export default SP500AdvancedAnalysis
+export default USStocksAdvancedAnalysis

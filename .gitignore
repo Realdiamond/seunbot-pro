@@ -51,3 +51,5 @@ pnpm-lock.yaml
 __pycache__
 *.md
 !README.md
+.vercel
+.env*

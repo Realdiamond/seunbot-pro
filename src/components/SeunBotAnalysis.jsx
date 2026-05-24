@@ -205,7 +205,7 @@ const SeunBotAnalysis = ({ selectedPair = 'BTCUSDT', priceData = null }) => {
       institutionalFlow: Math.random() > 0.5 ? 'Inflow' : 'Outflow'
     },
     macroFactors: {
-      correlation_sp500: (Math.random() * 0.8 + 0.1).toFixed(2),
+      correlation_usstocks: (Math.random() * 0.8 + 0.1).toFixed(2),
       correlation_gold: (Math.random() * 0.6 - 0.3).toFixed(2),
       correlation_dxy: (Math.random() * -0.5 - 0.2).toFixed(2),
       fed_policy_impact: Math.random() > 0.5 ? 'Supportive' : 'Restrictive'
@@ -908,7 +908,7 @@ const SeunBotAnalysis = ({ selectedPair = 'BTCUSDT', priceData = null }) => {
               <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded">
                 <div className="text-orange-400 font-medium text-sm mb-2">Macro Correlations</div>
                 <div className="grid grid-cols-2 gap-4 text-xs text-gray-300">
-                  <div>S&P 500: {analysis.fundamental.macroFactors.correlation_sp500}</div>
+                  <div>US Stocks: {analysis.fundamental.macroFactors.correlation_usstocks}</div>
                   <div>Gold: {analysis.fundamental.macroFactors.correlation_gold}</div>
                   <div>DXY: {analysis.fundamental.macroFactors.correlation_dxy}</div>
                   <div>Fed Policy: {analysis.fundamental.macroFactors.fed_policy_impact}</div>

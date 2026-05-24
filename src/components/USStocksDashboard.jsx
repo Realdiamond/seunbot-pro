@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, RefreshCw, Search, Filter, Star, Brain, Target, Zap, Wifi, WifiOff } from 'lucide-react';
-import SP500DataService from '../services/SP500DataService';
+import USStocksDataService from '../services/USStocksDataService';
 import AIStockAnalyzer from '../services/AIStockAnalyzer';
-import SP500AdvancedAnalysis from './SP500AdvancedAnalysis';
-import SP500WeeklySetupsPanel from './SP500WeeklySetupsPanel';
-import { sp500WebSocket } from '../services/WebSocketService';
+import USStocksAdvancedAnalysis from './USStocksAdvancedAnalysis';
+import USStocksWeeklySetupsPanel from './USStocksWeeklySetupsPanel';
+import { usStocksWebSocket } from '../services/WebSocketService';
 
-const SP500Dashboard = () => {
+const USStocksDashboard = () => {
   const [stocks, setStocks] = useState([]);
   const [marketSummary, setMarketSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,18 +48,17 @@ const SP500Dashboard = () => {
 
   useEffect(() => {
     loadData();
-    // No need for HTTP polling interval - WebSocket handles real-time updates
     // Fallback: refresh every 5 minutes for market summary
     const interval = setInterval(async () => {
       try {
-        const summary = await SP500DataService.fetchMarketSummary();
+        const summary = await USStocksDataService.fetchMarketSummary();
         setMarketSummary(summary);
       } catch (e) { /* ignore */ }
     }, 5 * 60 * 1000);
 
     return () => {
       clearInterval(interval);
-      sp500WebSocket.disconnect();
+      usStocksWebSocket.disconnect();
     };
   }, []);
 
@@ -67,34 +66,34 @@ const SP500Dashboard = () => {
     setLoading(true);
     try {
       const [stocksData, summary] = await Promise.all([
-        SP500DataService.getAllStocks(),
-        SP500DataService.fetchMarketSummary()
+        USStocksDataService.getAllStocks(),
+        USStocksDataService.fetchMarketSummary()
       ]);
       setStocks(stocksData);
       setMarketSummary(summary);
 
       // Seed WebSocket cache with initial data and connect
-      sp500WebSocket.seedCache(stocksData);
+      usStocksWebSocket.seedCache(stocksData);
       const symbols = stocksData.map(s => s.symbol);
 
       // Subscribe to all symbols for real-time updates
       symbols.forEach(symbol => {
-        sp500WebSocket.subscribe(symbol, handleWsUpdate);
+        usStocksWebSocket.subscribe(symbol, handleWsUpdate);
       });
 
-      // Connect WebSocket (tries Polygon → TwelveData → HTTP polling)
-      sp500WebSocket.onStatusChange(setWsStatus);
-      sp500WebSocket.connect('sp500', symbols);
+      // Connect WebSocket
+      usStocksWebSocket.onStatusChange(setWsStatus);
+      usStocksWebSocket.connect('usstocks', symbols);
     } catch (error) {
-      console.error('Error loading S&P 500 data:', error);
+      console.error('Error loading US Stocks data:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleRefresh = () => {
-    SP500DataService.clearCache();
-    sp500WebSocket.disconnect();
+    USStocksDataService.clearCache();
+    usStocksWebSocket.disconnect();
     loadData();
   };
 
@@ -152,7 +151,7 @@ const SP500Dashboard = () => {
           <div>
             <h1 className="text-3xl font-bold text-white flex items-center gap-3">
               <BarChart3 className="w-8 h-8 text-purple-400" />
-              S&P 500 Stock Dashboard
+              US Stocks Dashboard
             </h1>
             <div className="flex items-center gap-3 mt-1">
               <p className="text-gray-400">Real-time data with SeunBot intelligence</p>
@@ -228,7 +227,7 @@ const SP500Dashboard = () => {
                 <h2 className="text-xl font-semibold text-white mb-4">Market Overview</h2>
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                   <div className="bg-gray-700/50 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">S&P 500 Index</div>
+                    <div className="text-sm text-gray-400 mb-1">US Stocks Index</div>
                     <div className="text-2xl font-bold text-white">{marketSummary.index.toFixed(2)}</div>
                     <div className={`text-sm font-semibold ${marketSummary.indexChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {marketSummary.indexChange >= 0 ? '+' : ''}{marketSummary.indexChange.toFixed(2)} ({marketSummary.indexChangePercent.toFixed(2)}%)
@@ -364,135 +363,147 @@ const SP500Dashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
-                    {filteredStocks.map((stock) => (
-                      <tr
-                        key={stock.symbol}
-                        className="hover:bg-gray-700/50 transition-colors cursor-pointer"
-                        onClick={() => handleStockClick(stock)}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-white">{stock.symbol}</span>
-                            {!stock.isMock && (
-                              <span className="text-xs px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Live</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-300">{stock.name}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-xs px-2 py-1 bg-purple-500/20 text-purple-400 rounded">
-                            {stock.sector}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className={`text-sm font-semibold ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {stock.changePercent >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                            {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="text-sm text-gray-300">
-                            {(stock.volume / 1000000).toFixed(2)}M
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStockClick(stock);
-                            }}
-                            className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-xs transition-colors flex items-center gap-1 mx-auto"
-                          >
-                            <Brain className="w-3 h-3" />
-                            Analyze
-                          </button>
+                    {filteredStocks.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
+                          <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p className="font-semibold text-lg">No US Stocks Found</p>
+                          <p className="text-sm text-gray-500">Ensure the backend US assets endpoints are active or try again later.</p>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredStocks.map((stock) => (
+                        <tr
+                          key={stock.symbol}
+                          className="hover:bg-gray-700/50 transition-colors cursor-pointer"
+                          onClick={() => handleStockClick(stock)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white">{stock.symbol}</span>
+                              {!stock.isMock && (
+                                <span className="text-xs px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Live</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-300">{stock.name}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-xs px-2 py-1 bg-purple-500/20 text-purple-400 rounded">
+                              {stock.sector}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className={`text-sm font-semibold ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stock.changePercent >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                              {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="text-sm text-gray-300">
+                              {(stock.volume / 1000000).toFixed(2)}M
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStockClick(stock);
+                              }}
+                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-xs transition-colors flex items-center gap-1 mx-auto"
+                            >
+                              <Brain className="w-3 h-3" />
+                              Analyze
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
             {/* Top Gainers and Losers */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top Gainers */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-green-400" />
-                  Top Gainers
-                </h2>
-                <div className="space-y-3">
-                  {stocks
-                    .sort((a, b) => b.changePercent - a.changePercent)
-                    .slice(0, 5)
-                    .map((stock) => (
-                      <div
-                        key={stock.symbol}
-                        className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
-                        onClick={() => handleStockClick(stock)}
-                      >
-                        <div>
-                          <div className="font-semibold text-white">{stock.symbol}</div>
-                          <div className="text-xs text-gray-400">{stock.name}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
-                          <div className="text-sm font-bold text-green-400">
-                            +{stock.changePercent.toFixed(2)}%
+            {stocks.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Top Gainers */}
+                <div className="bg-gray-800 rounded-lg p-6">
+                  <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-green-400" />
+                    Top Gainers
+                  </h2>
+                  <div className="space-y-3">
+                    {stocks
+                      .sort((a, b) => b.changePercent - a.changePercent)
+                      .slice(0, 5)
+                      .map((stock) => (
+                        <div
+                          key={stock.symbol}
+                          className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
+                          onClick={() => handleStockClick(stock)}
+                        >
+                          <div>
+                            <div className="font-semibold text-white">{stock.symbol}</div>
+                            <div className="text-xs text-gray-400">{stock.name}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
+                            <div className="text-sm font-bold text-green-400">
+                              +{stock.changePercent.toFixed(2)}%
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Top Losers */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5 text-red-400" />
-                  Top Losers
-                </h2>
-                <div className="space-y-3">
-                  {stocks
-                    .sort((a, b) => a.changePercent - b.changePercent)
-                    .slice(0, 5)
-                    .map((stock) => (
-                      <div
-                        key={stock.symbol}
-                        className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
-                        onClick={() => handleStockClick(stock)}
-                      >
-                        <div>
-                          <div className="font-semibold text-white">{stock.symbol}</div>
-                          <div className="text-xs text-gray-400">{stock.name}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
-                          <div className="text-sm font-bold text-red-400">
-                            {stock.changePercent.toFixed(2)}%
+                {/* Top Losers */}
+                <div className="bg-gray-800 rounded-lg p-6">
+                  <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                    <TrendingDown className="w-5 h-5 text-red-400" />
+                    Top Losers
+                  </h2>
+                  <div className="space-y-3">
+                    {stocks
+                      .sort((a, b) => a.changePercent - b.changePercent)
+                      .slice(0, 5)
+                      .map((stock) => (
+                        <div
+                          key={stock.symbol}
+                          className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
+                          onClick={() => handleStockClick(stock)}
+                        >
+                          <div>
+                            <div className="font-semibold text-white">{stock.symbol}</div>
+                            <div className="text-xs text-gray-400">{stock.name}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
+                            <div className="text-sm font-bold text-red-400">
+                              {stock.changePercent.toFixed(2)}%
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </>
         )}
 
         {activeTab === 'advanced' && selectedStock && (
-          <SP500AdvancedAnalysis selectedStock={selectedStock.symbol} stockData={selectedStock} />
+          <USStocksAdvancedAnalysis selectedStock={selectedStock.symbol} stockData={selectedStock} />
         )}
 
         {activeTab === 'advanced' && !selectedStock && (
@@ -504,7 +515,7 @@ const SP500Dashboard = () => {
         )}
 
         {activeTab === 'weeklySetups' && (
-          <SP500WeeklySetupsPanel />
+          <USStocksWeeklySetupsPanel />
         )}
       </div>
 
@@ -656,4 +667,4 @@ const StockAnalysisPanel = ({ stock }) => {
   );
 };
 
-export default SP500Dashboard;
+export default USStocksDashboard;
