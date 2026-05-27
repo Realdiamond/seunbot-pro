@@ -22,6 +22,14 @@ class USStocksDataService {
     return Number.isFinite(num) ? num : fallback;
   }
 
+  cleanStockName(name) {
+    if (!name) return '';
+    return name
+      .replace(/\s+US\s+Stock$/i, '')
+      .replace(/\s+US$/i, '')
+      .trim();
+  }
+
   clearCache() {
     this.stocksCache.data = null;
     this.stocksCache.timestamp = 0;
@@ -93,7 +101,7 @@ class USStocksDataService {
         const summary = await this.fetchDataSummary(forceRefresh);
         return (summary.symbols || []).map(s => ({
           symbol: this.normalizeSymbol(s.symbol),
-          name: s.name || s.symbol,
+          name: this.cleanStockName(s.name || s.symbol),
           exchange: 'US',
           sector: 'US',
           price: 0, change: 0, changePercent: 0,
@@ -118,7 +126,7 @@ class USStocksDataService {
     const changePercent = this.toNumber(item.priceChangePercent24h, 0);
     return {
       symbol,
-      name: item.name || symbol,
+      name: this.cleanStockName(item.name || symbol),
       exchange: item.exchange || 'US',
       sector: item.sector || 'US',
       price,
@@ -183,10 +191,22 @@ class USStocksDataService {
       const unchanged = Math.max((summary.totalSymbols || stocks.length) - advancers - decliners, 0);
       const totalVolume = stocks.reduce((sum, s) => sum + this.toNumber(s.volume, 0), 0);
 
+      // Dynamically calculate index movement based on the average performance of stocks
+      const validStocks = stocks.filter(s => s.price > 0);
+      let avgChangePercent = 0;
+      if (validStocks.length > 0) {
+        avgChangePercent = validStocks.reduce((sum, s) => sum + this.toNumber(s.changePercent, 0), 0) / validStocks.length;
+      }
+
+      const baseIndex = 15000;
+      const indexChangePercent = avgChangePercent;
+      const indexChange = baseIndex * (indexChangePercent / 100);
+      const index = baseIndex + indexChange;
+
       return {
-        index: 0,
-        indexChange: 0,
-        indexChangePercent: 0,
+        index,
+        indexChange,
+        indexChangePercent,
         totalMarketCap: 0,
         totalVolume,
         advancers,
@@ -296,7 +316,7 @@ class USStocksDataService {
     return {
       // Pass-through fields
       symbol: raw.symbol,
-      companyName: raw.companyName,
+      companyName: this.cleanStockName(raw.companyName || raw.symbol),
       recommendation: rec,
       confidence: this.toNumber(raw.confidence, 0),
       currentPrice: this.toNumber(raw.currentPrice, 0),

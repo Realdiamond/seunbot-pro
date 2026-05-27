@@ -99,6 +99,9 @@ const RsiGauge = ({ value }) => {
 const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
   const [activeTab, setActiveTab] = useState('overview')
   const [prediction, setPrediction] = useState(null)
+  const [verification, setVerification] = useState(null)
+  const [sentiment, setSentiment] = useState(null)
+  const [history, setHistory] = useState([])
   const [priceData, setPriceData] = useState(null)
   const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'syncing' | 'ready' | 'error'
   const [syncMessage, setSyncMessage] = useState('')
@@ -134,22 +137,27 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
     }
   }, [selectedStock, stockData])
 
-  // Load full SeunBot prediction
+  // Load full SeunBot prediction + details
   useEffect(() => {
     if (!selectedStock) return
     abortRef.current = false
     setStatus('loading')
     setPrediction(null)
+    setVerification(null)
+    setSentiment(null)
+    setHistory([])
     setSyncMessage('')
 
     const load = async () => {
       try {
         setStatus('syncing')
         setSyncMessage('Requesting analysis from SeunBot backend...')
-        const result = await USStocksDataService.fetchUsPrediction(selectedStock, {
-          maxRetries: 5,
-          retryDelayMs: 5000
-        })
+        const [result, verifyRes, sentimentRes, historyRes] = await Promise.all([
+          USStocksDataService.fetchUsPrediction(selectedStock, { maxRetries: 5, retryDelayMs: 5000 }),
+          USStocksDataService.verifyData(selectedStock).catch(() => null),
+          USStocksDataService.fetchSentiment(selectedStock).catch(() => null),
+          USStocksDataService.fetchHistory(selectedStock, 10).catch(() => [])
+        ])
 
         if (abortRef.current) return
 
@@ -160,6 +168,9 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
         }
 
         setPrediction(result)
+        setVerification(verifyRes)
+        setSentiment(sentimentRes)
+        setHistory(historyRes || [])
         setStatus('ready')
         setDataSource(`✅ Live — ${result.analysisTimestamp ? new Date(result.analysisTimestamp).toLocaleTimeString() : 'just now'}`)
       } catch (err) {
@@ -177,10 +188,18 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
     abortRef.current = false
     setStatus('loading')
     setPrediction(null)
+    setVerification(null)
+    setSentiment(null)
+    setHistory([])
     setSyncMessage('')
 
-    USStocksDataService.fetchUsPrediction(selectedStock, { maxRetries: 5, retryDelayMs: 5000 })
-      .then(result => {
+    Promise.all([
+      USStocksDataService.fetchUsPrediction(selectedStock, { maxRetries: 5, retryDelayMs: 5000 }),
+      USStocksDataService.verifyData(selectedStock).catch(() => null),
+      USStocksDataService.fetchSentiment(selectedStock).catch(() => null),
+      USStocksDataService.fetchHistory(selectedStock, 10).catch(() => [])
+    ])
+      .then(([result, verifyRes, sentimentRes, historyRes]) => {
         if (abortRef.current) return
         if (result._isSyncing) {
           setStatus('syncing')
@@ -188,6 +207,9 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
           return
         }
         setPrediction(result)
+        setVerification(verifyRes)
+        setSentiment(sentimentRes)
+        setHistory(historyRes || [])
         setStatus('ready')
         setDataSource(`✅ Live — ${result.analysisTimestamp ? new Date(result.analysisTimestamp).toLocaleTimeString() : 'just now'}`)
       })
@@ -283,6 +305,8 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'sentiment', label: 'AI Sentiment (Grok)', icon: Globe },
+    { id: 'history', label: 'Prediction History', icon: Clock },
     { id: 'indicators', label: 'Indicators', icon: Activity },
     { id: 'tradePlan', label: 'Trade Plan', icon: Target },
     { id: 'patterns', label: 'Patterns', icon: Triangle },
@@ -292,7 +316,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
   return (
     <div className="bg-gray-800 rounded-lg p-6">
       {/* Header */}
-      <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} />
+      <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} verification={verification} />
 
       {/* Price Bar */}
       <PriceBar />
@@ -390,6 +414,8 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
           />
         )}
         {activeTab === 'narrative' && <NarrativeTab narrative={prediction?.tradeNarrative} />}
+        {activeTab === 'sentiment' && <SentimentTab sentiment={sentiment} />}
+        {activeTab === 'history' && <HistoryTab history={history} />}
       </div>
     </div>
   )
@@ -399,12 +425,21 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
 // Sub-components
 // ─────────────────────────────────────────────────────
 
-const Header = ({ selectedStock, dataSource, onRefresh }) => (
+const Header = ({ selectedStock, dataSource, onRefresh, verification }) => (
   <div className="flex items-center justify-between mb-4">
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Brain className="w-5 h-5 text-purple-400" />
       <h3 className="text-lg font-semibold text-white">SeunBot Advanced Analysis</h3>
-      <span className="px-2 py-0.5 bg-purple-500/20 rounded text-xs text-purple-400">{selectedStock}</span>
+      <span className="px-2 py-0.5 bg-purple-500/20 rounded text-xs text-purple-400 font-semibold">{selectedStock}</span>
+      {verification && (
+        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+          verification.dataQuality === 'HIGH' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+          verification.dataQuality === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+          'bg-red-500/20 text-red-400 border border-red-500/30'
+        }`}>
+          Data Quality: {verification.dataQuality || 'UNKNOWN'} ({verification.recordCount || 0} records)
+        </span>
+      )}
     </div>
     <div className="flex items-center gap-2">
       <span className="text-xs text-gray-500">{dataSource}</span>
@@ -738,6 +773,180 @@ const NarrativeTab = ({ narrative }) => {
       <pre className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">
         {narrative}
       </pre>
+    </div>
+  )
+}
+
+const SentimentTab = ({ sentiment }) => {
+  if (!sentiment) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 gap-3">
+        <Globe className="w-12 h-12 text-gray-600 animate-pulse" />
+        <p className="text-gray-400">Loading AI Sentiment analysis...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {sentiment.errorMessage && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-xs">
+          <span className="font-semibold">Grok API Status:</span> {sentiment.errorMessage}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-4 flex flex-col justify-center items-center text-center">
+          <span className="text-sm text-gray-400 mb-1">Grok Overall Sentiment</span>
+          <span className={`text-2xl font-extrabold ${
+            sentiment.sentimentLabel === 'BULLISH' ? 'text-green-400' :
+            sentiment.sentimentLabel === 'BEARISH' ? 'text-red-400' : 'text-yellow-400'
+          }`}>
+            {sentiment.sentimentLabel || 'NEUTRAL'}
+          </span>
+        </div>
+        <div className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-4 flex flex-col justify-center items-center text-center">
+          <span className="text-sm text-gray-400 mb-1">Sentiment Confidence</span>
+          <span className="text-2xl font-extrabold text-white">
+            {Math.round((sentiment.confidence || 0) * 100)}%
+          </span>
+        </div>
+      </div>
+
+      {sentiment.summary && (
+        <div className="p-4 bg-gray-700/30 border border-gray-600/30 rounded-lg">
+          <h4 className="text-white font-medium mb-2">AI Summary</h4>
+          <p className="text-sm text-gray-300 leading-relaxed">{sentiment.summary}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 bg-green-500/5 border border-green-500/10 rounded-lg">
+          <h4 className="text-green-400 font-medium mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" />
+            Drivers & Opportunities
+          </h4>
+          <ul className="space-y-2">
+            {((sentiment.keyDrivers || []).concat(sentiment.opportunities || [])).slice(0, 5).map((item, i) => (
+              <li key={i} className="text-sm text-gray-300 flex items-start gap-2">
+                <span className="text-green-400 mt-1">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+            {(!sentiment.keyDrivers?.length && !sentiment.opportunities?.length) && (
+              <li className="text-sm text-gray-500 italic">None reported</li>
+            )}
+          </ul>
+        </div>
+
+        <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-lg">
+          <h4 className="text-red-400 font-medium mb-3 flex items-center gap-2">
+            <TrendingDown className="w-4 h-4" />
+            Risk Factors
+          </h4>
+          <ul className="space-y-2">
+            {(sentiment.risks || []).slice(0, 5).map((risk, i) => (
+              <li key={i} className="text-sm text-gray-300 flex items-start gap-2">
+                <span className="text-red-400 mt-1">•</span>
+                <span>{risk}</span>
+              </li>
+            ))}
+            {!sentiment.risks?.length && (
+              <li className="text-sm text-gray-500 italic">None reported</li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      {sentiment.recentNews?.length > 0 && (
+        <div className="p-4 bg-gray-700/30 border border-gray-600/30 rounded-lg">
+          <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+            <Globe className="w-4 h-4 text-purple-400" />
+            Recent News Coverage
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto pr-1">
+            {sentiment.recentNews.map((news, idx) => (
+              <div key={idx} className="p-4 bg-gray-800 rounded-lg border border-gray-700 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <a href={news.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-purple-400 hover:underline">
+                      {news.title}
+                    </a>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border shrink-0 ${
+                      news.sentimentLabel === 'BULLISH' ? 'bg-green-500/15 text-green-400 border-green-500/20' :
+                      news.sentimentLabel === 'BEARISH' ? 'bg-red-500/15 text-red-400 border-red-500/20' :
+                      'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
+                    }`}>
+                      {news.sentimentLabel}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-3">{news.summary}</p>
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-500 border-t border-gray-700 pt-2">
+                  <span>{news.source}</span>
+                  <span>{new Date(news.publishedAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const HistoryTab = ({ history }) => {
+  if (!history || history.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 gap-3">
+        <Clock className="w-12 h-12 text-gray-600" />
+        <p className="text-gray-400 font-medium">No historical predictions recorded yet.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-4 bg-gray-700/30 border border-gray-600/30 rounded-lg">
+      <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+        <Clock className="w-4 h-4 text-purple-400" />
+        Prediction History Timeline
+      </h4>
+      <div className="overflow-x-auto rounded-lg border border-gray-700">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-gray-700 text-gray-300 uppercase font-semibold">
+            <tr>
+              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3">Price</th>
+              <th className="px-4 py-3">SeunBot Recommendation</th>
+              <th className="px-4 py-3 text-right">Final Score</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700 text-gray-300">
+            {history.map((h, i) => (
+              <tr key={i} className="hover:bg-gray-700/40">
+                <td className="px-4 py-3.5 font-medium whitespace-nowrap">
+                  {new Date(h.predictedAt || h.createdAt).toLocaleString()}
+                </td>
+                <td className="px-4 py-3.5 font-semibold text-white">
+                  ${(h.priceAtPrediction || h.suggestedEntry || 0).toFixed(2)}
+                </td>
+                <td className="px-4 py-3.5">
+                  <span className={`px-2.5 py-0.5 rounded-full font-bold border ${
+                    h.recommendation === 'BUY' ? 'bg-green-500/15 text-green-400 border-green-500/20' :
+                    h.recommendation === 'SELL' ? 'bg-red-500/15 text-red-400 border-red-500/20' :
+                    'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
+                  }`}>
+                    {h.recommendation}
+                  </span>
+                </td>
+                <td className={`px-4 py-3.5 font-bold text-right ${h.finalScore >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {h.finalScore != null ? (h.finalScore > 0 ? `+${h.finalScore.toFixed(3)}` : h.finalScore.toFixed(3)) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
