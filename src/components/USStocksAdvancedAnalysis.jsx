@@ -96,7 +96,7 @@ const RsiGauge = ({ value }) => {
 // ─────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────
-const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
+const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks = [], onSelectStock }) => {
   const [activeTab, setActiveTab] = useState('overview')
   const [prediction, setPrediction] = useState(null)
   const [verification, setVerification] = useState(null)
@@ -248,11 +248,33 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
     )
   }
 
+  // ── No Stock Selected ──────────────────────────────
+  if (!selectedStock) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6">
+        <Header
+          selectedStock=""
+          dataSource=""
+          onRefresh={() => {}}
+          stocks={stocks}
+          onSelectStock={onSelectStock}
+        />
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <Brain className="w-16 h-16 text-gray-600 animate-pulse" />
+          <div className="text-center">
+            <p className="text-white font-medium text-lg">Select a Stock to Begin Analysis</p>
+            <p className="text-sm text-gray-400 mt-1">Use the dropdown menu at the top or pick a stock from the Market Overview tab.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── Loading / Syncing ──────────────────────────────
   if (status === 'loading' || (status === 'syncing' && !prediction)) {
     return (
       <div className="bg-gray-800 rounded-lg p-6">
-        <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} />
+        <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} stocks={stocks} onSelectStock={onSelectStock} />
         <PriceBar />
         <div className="flex flex-col items-center justify-center h-48 gap-4">
           <Loader className="w-10 h-10 text-purple-400 animate-spin" />
@@ -274,7 +296,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
   if (status === 'error' || (status === 'syncing' && !prediction)) {
     return (
       <div className="bg-gray-800 rounded-lg p-6">
-        <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} />
+        <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} stocks={stocks} onSelectStock={onSelectStock} />
         <PriceBar />
         <div className="flex flex-col items-center justify-center h-48 gap-4">
           <AlertTriangle className="w-12 h-12 text-yellow-400 opacity-70" />
@@ -316,7 +338,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
   return (
     <div className="bg-gray-800 rounded-lg p-6">
       {/* Header */}
-      <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} verification={verification} />
+      <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} verification={verification} stocks={stocks} onSelectStock={onSelectStock} />
 
       {/* Price Bar */}
       <PriceBar />
@@ -425,12 +447,27 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
 // Sub-components
 // ─────────────────────────────────────────────────────
 
-const Header = ({ selectedStock, dataSource, onRefresh, verification }) => (
+const Header = ({ selectedStock, dataSource, onRefresh, verification, stocks = [], onSelectStock }) => (
   <div className="flex items-center justify-between mb-4">
     <div className="flex flex-wrap items-center gap-2">
       <Brain className="w-5 h-5 text-purple-400" />
       <h3 className="text-lg font-semibold text-white">SeunBot Advanced Analysis</h3>
-      <span className="px-2 py-0.5 bg-purple-500/20 rounded text-xs text-purple-400 font-semibold">{selectedStock}</span>
+      {stocks && stocks.length > 0 ? (
+        <select
+          value={selectedStock || ''}
+          onChange={(e) => onSelectStock && onSelectStock(e.target.value)}
+          className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-lg text-xs text-white font-semibold focus:outline-none focus:border-purple-500 cursor-pointer max-w-[200px]"
+        >
+          {!selectedStock && <option value="">-- Select a Stock --</option>}
+          {stocks.map(s => (
+            <option key={s.symbol} value={s.symbol}>
+              {s.symbol} - {s.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="px-2 py-0.5 bg-purple-500/20 rounded text-xs text-purple-400 font-semibold">{selectedStock}</span>
+      )}
       {verification && (
         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
           verification.dataQuality === 'HIGH' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :

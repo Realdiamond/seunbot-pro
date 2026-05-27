@@ -82,6 +82,11 @@ const USStocksDashboard = () => {
       setStocks(stocksData);
       setMarketSummary(summary);
 
+      // Pre-select the first stock so the analysis tab has a default selection
+      if (stocksData && stocksData.length > 0 && !selectedStock) {
+        setSelectedStock(stocksData[0]);
+      }
+
       // Initialize watchlist from localStorage or defaults
       const savedWatchlist = localStorage.getItem('us_stocks_watchlist');
       let currentWatchlist = [];
@@ -702,16 +707,16 @@ const USStocksDashboard = () => {
           </>
         )}
 
-        {activeTab === 'advanced' && selectedStock && (
-          <USStocksAdvancedAnalysis selectedStock={selectedStock.symbol} stockData={selectedStock} />
-        )}
-
-        {activeTab === 'advanced' && !selectedStock && (
-          <div className="bg-gray-800 rounded-lg p-12 text-center">
-            <Brain className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-            <h3 className="text-xl font-semibold text-white mb-2">Select a Stock for SeunBot Analysis</h3>
-            <p className="text-gray-400">Click on any stock from the Market Overview tab to see advanced analysis</p>
-          </div>
+        {activeTab === 'advanced' && (
+          <USStocksAdvancedAnalysis
+            selectedStock={selectedStock?.symbol}
+            stockData={selectedStock}
+            stocks={stocks}
+            onSelectStock={(symbol) => {
+              const found = stocks.find(s => s.symbol === symbol);
+              if (found) setSelectedStock(found);
+            }}
+          />
         )}
 
         {activeTab === 'weeklySetups' && (
