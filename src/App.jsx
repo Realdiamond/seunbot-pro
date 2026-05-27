@@ -312,8 +312,8 @@ function App() {
                 {hasUsStocks && (
                   <>
                     <Route path="/usstocks" element={<USStocksDashboard />} />
-                    <Route path="/usstocks-analysis" element={<USStocksAdvancedAnalysis />} />
-                    <Route path="/usstocks-setups" element={<USStocksWeeklySetupsPanel />} />
+                    <Route path="/usstocks-analysis" element={<USStocksDashboard />} />
+                    <Route path="/usstocks-setups" element={<USStocksDashboard />} />
                   </>
                 )}
 

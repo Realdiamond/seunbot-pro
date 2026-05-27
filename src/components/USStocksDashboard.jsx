@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, RefreshCw, Search, Filter, Star, Brain, Target, Zap, Wifi, WifiOff, Clock, Globe } from 'lucide-react';
 import USStocksDataService from '../services/USStocksDataService';
 
@@ -16,7 +17,16 @@ const USStocksDashboard = () => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedStock, setSelectedStock] = useState(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const activeTab = useMemo(() => {
+    if (location.pathname === '/usstocks-analysis') return 'advanced';
+    if (location.pathname === '/usstocks-setups') return 'weeklySetups';
+    return 'overview';
+  }, [location.pathname]);
+
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
@@ -277,7 +287,7 @@ const USStocksDashboard = () => {
         {/* Tabs */}
         <div className="flex space-x-2 bg-gray-800 rounded-lg p-1">
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => navigate('/usstocks')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               activeTab === 'overview' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
@@ -286,7 +296,7 @@ const USStocksDashboard = () => {
             Market Overview
           </button>
           <button
-            onClick={() => setActiveTab('advanced')}
+            onClick={() => navigate('/usstocks-analysis')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               activeTab === 'advanced' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
@@ -295,7 +305,7 @@ const USStocksDashboard = () => {
             SeunBot Analysis
           </button>
           <button
-            onClick={() => setActiveTab('weeklySetups')}
+            onClick={() => navigate('/usstocks-setups')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               activeTab === 'weeklySetups' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
