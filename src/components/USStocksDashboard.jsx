@@ -241,16 +241,16 @@ const USStocksDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-900 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
               <BarChart3 className="w-8 h-8 text-purple-400" />
               US Stocks Dashboard
             </h1>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
               <p className="text-gray-400">Real-time data with SeunBot intelligence</p>
               {wsStatus === 'connected' && (
                 <span className="flex items-center gap-1.5 text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
@@ -285,10 +285,10 @@ const USStocksDashboard = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-2 bg-gray-800 rounded-lg p-1">
+        <div className="flex overflow-x-auto whitespace-nowrap gap-1 bg-gray-800 rounded-lg p-1 scrollbar-none scroll-smooth">
           <button
             onClick={() => navigate('/usstocks')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               activeTab === 'overview' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -297,7 +297,7 @@ const USStocksDashboard = () => {
           </button>
           <button
             onClick={() => navigate('/usstocks-analysis')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               activeTab === 'advanced' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -306,7 +306,7 @@ const USStocksDashboard = () => {
           </button>
           <button
             onClick={() => navigate('/usstocks-setups')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
               activeTab === 'weeklySetups' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -320,9 +320,9 @@ const USStocksDashboard = () => {
           <>
             {/* Market Summary */}
             {marketSummary && (
-              <div className="bg-gray-800 rounded-lg p-6">
+              <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h2 className="text-xl font-semibold text-white mb-4">Market Overview</h2>
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                   <div className="bg-gray-700/50 rounded-lg p-4">
                     <div className="text-sm text-gray-400 mb-1">US Stocks Index</div>
                     <div className="text-2xl font-bold text-white">{marketSummary.index.toFixed(2)}</div>
@@ -363,9 +363,9 @@ const USStocksDashboard = () => {
             )}
 
             {/* Sector Performance */}
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
               <h2 className="text-xl font-semibold text-white mb-4">Sector Performance</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {sectorPerformance.slice(0, 10).map(({ sector, avgChange, count }) => (
                   <div
                     key={sector}
@@ -383,7 +383,7 @@ const USStocksDashboard = () => {
             </div>
 
             {/* Filters and Search */}
-            <div className="bg-gray-800 rounded-lg p-6 space-y-6">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6 space-y-6">
               <div className="flex border-b border-gray-700 pb-4 justify-between items-center flex-wrap gap-4">
                 <div className="flex space-x-2">
                   <button
@@ -415,7 +415,7 @@ const USStocksDashboard = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Search */}
                 <div className="lg:col-span-2">
                   <label className="block text-sm text-gray-400 mb-2">Search Stocks</label>
@@ -480,16 +480,16 @@ const USStocksDashboard = () => {
                 <table className="w-full">
                   <thead className="bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Symbol</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Symbol</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden sm:table-cell">Name</th>
+                      <th className="px-4 py-3 sm:px-6 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden md:table-cell">
                         {viewMode === 'watchlist' ? 'SeunBot Rating' : 'Sector'}
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Price</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Change</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">% Change</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Volume</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
+                      <th className="px-4 py-3 sm:px-6 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Price</th>
+                      <th className="px-4 py-3 sm:px-6 text-right text-xs font-medium text-gray-300 uppercase tracking-wider hidden md:table-cell">Change</th>
+                      <th className="px-4 py-3 sm:px-6 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">% Change</th>
+                      <th className="px-4 py-3 sm:px-6 text-right text-xs font-medium text-gray-300 uppercase tracking-wider hidden lg:table-cell">Volume</th>
+                      <th className="px-4 py-3 sm:px-6 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
@@ -508,30 +508,33 @@ const USStocksDashboard = () => {
                           className="hover:bg-gray-700/50 transition-colors cursor-pointer"
                           onClick={() => handleStockClick(stock)}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => toggleWatchlist(stock.symbol, e)}
-                                className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 focus:outline-none"
-                              >
-                                <Star
-                                  className={`w-4 h-4 ${
-                                    watchlist.includes(stock.symbol)
-                                      ? 'text-yellow-400 fill-current'
-                                      : 'text-gray-500 hover:text-yellow-400'
-                                  }`}
-                                />
-                              </button>
-                              <span className="text-sm font-bold text-white">{stock.symbol}</span>
-                              {!stock.isMock && (
-                                <span className="text-xs px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Live</span>
-                              )}
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => toggleWatchlist(stock.symbol, e)}
+                                  className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 focus:outline-none"
+                                >
+                                  <Star
+                                    className={`w-4 h-4 ${
+                                      watchlist.includes(stock.symbol)
+                                        ? 'text-yellow-400 fill-current'
+                                        : 'text-gray-500 hover:text-yellow-400'
+                                    }`}
+                                  />
+                                </button>
+                                <span className="text-sm font-bold text-white">{stock.symbol}</span>
+                                {!stock.isMock && (
+                                  <span className="text-xs px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Live</span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-gray-400 sm:hidden pl-7 truncate max-w-[120px]">{stock.name}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap hidden sm:table-cell">
                             <div className="text-sm text-gray-300">{stock.name}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap hidden md:table-cell">
                             {viewMode === 'watchlist' ? (
                               loadingBatch ? (
                                 <span className="text-xs text-gray-500 animate-pulse">Loading...</span>
@@ -561,26 +564,26 @@ const USStocksDashboard = () => {
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-right">
                             <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-right hidden md:table-cell">
                             <div className={`text-sm font-semibold ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                               {stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-right">
                             <div className={`flex items-center justify-end gap-1 text-sm font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                               {stock.changePercent >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                               {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-right hidden lg:table-cell">
                             <div className="text-sm text-gray-300">
                               {(stock.volume / 1000000).toFixed(2)}M
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-center">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -736,12 +739,12 @@ const USStocksDashboard = () => {
 
       {/* Stock Analysis Modal */}
       {showAnalysis && selectedStock && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowAnalysis(false)}>
-          <div className="bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-6 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50" onClick={() => setShowAnalysis(false)}>
+          <div className="bg-gray-800 rounded-lg max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 sm:p-6 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-white">{selectedStock.symbol} - {selectedStock.name}</h2>
-                <p className="text-gray-400">{selectedStock.sector}</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">{selectedStock.symbol} - {selectedStock.name}</h2>
+                <p className="text-sm text-gray-400">{selectedStock.sector}</p>
               </div>
               <button
                 onClick={() => setShowAnalysis(false)}
@@ -750,7 +753,7 @@ const USStocksDashboard = () => {
                 ×
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <StockAnalysisPanel stock={selectedStock} />
             </div>
           </div>
@@ -851,20 +854,20 @@ const StockAnalysisPanel = ({ stock }) => {
     <div className="space-y-4">
       {/* Price bar */}
       <div className="bg-gray-700/50 rounded-lg p-4">
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
             <div className="text-sm text-gray-400">Current Price</div>
-            <div className="text-2xl font-bold text-white">${(stock.price || prediction.currentPrice || 0).toFixed(2)}</div>
+            <div className="text-xl sm:text-2xl font-bold text-white">${(stock.price || prediction.currentPrice || 0).toFixed(2)}</div>
           </div>
           <div>
             <div className="text-sm text-gray-400">24h Change</div>
-            <div className={`text-lg font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className={`text-base sm:text-lg font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {stock.changePercent >= 0 ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
             </div>
           </div>
-          <div>
+          <div className="col-span-2 sm:col-span-1">
             <div className="text-sm text-gray-400">Volume</div>
-            <div className="text-lg font-semibold text-white">
+            <div className="text-base sm:text-lg font-semibold text-white">
               {stock.volume > 0 ? `${(stock.volume / 1_000_000).toFixed(2)}M` : '—'}
             </div>
           </div>
@@ -872,7 +875,7 @@ const StockAnalysisPanel = ({ stock }) => {
       </div>
 
       {/* Modal Sub-Tabs */}
-      <div className="flex border-b border-gray-700 bg-gray-800/60 p-1 rounded-lg">
+      <div className="flex overflow-x-auto whitespace-nowrap gap-1 bg-gray-800/60 p-1 rounded-lg border-b border-gray-700 scrollbar-none scroll-smooth">
         {[
           { id: 'signals', label: 'SeunBot Signals' },
           { id: 'sentiment', label: 'Grok Sentiment' },
@@ -882,7 +885,7 @@ const StockAnalysisPanel = ({ stock }) => {
           <button
             key={tab.id}
             onClick={() => setModalTab(tab.id)}
-            className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors ${
+            className={`flex-shrink-0 px-3 py-2 text-xs font-semibold rounded-md transition-colors ${
               modalTab === tab.id
                 ? 'bg-purple-600 text-white'
                 : 'text-gray-400 hover:text-white'
@@ -923,22 +926,22 @@ const StockAnalysisPanel = ({ stock }) => {
                 <Target className="w-5 h-5 text-blue-400" />
                 Trade Levels
               </h3>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                   <div className="text-xs text-gray-400 mb-1">Entry</div>
-                  <div className="text-lg font-bold text-blue-400">
+                  <div className="text-base sm:text-lg font-bold text-blue-400">
                     {prediction.tradePlan.entryPrice != null ? `$${prediction.tradePlan.entryPrice.toFixed(2)}` : '—'}
                   </div>
                 </div>
                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
                   <div className="text-xs text-gray-400 mb-1">Stop Loss</div>
-                  <div className="text-lg font-bold text-red-400">
+                  <div className="text-base sm:text-lg font-bold text-red-400">
                     {prediction.tradePlan.stopLoss != null ? `$${prediction.tradePlan.stopLoss.toFixed(2)}` : '—'}
                   </div>
                 </div>
                 <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
                   <div className="text-xs text-gray-400 mb-1">Take Profit</div>
-                  <div className="text-lg font-bold text-green-400">
+                  <div className="text-base sm:text-lg font-bold text-green-400">
                     {prediction.tradePlan.takeProfit1 != null ? `$${prediction.tradePlan.takeProfit1.toFixed(2)}` : '—'}
                   </div>
                   {prediction.tradePlan.riskRewardRatio1 != null && (

@@ -223,7 +223,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
     const d = priceData || stockData
     if (!d) return null
     return (
-      <div className="mb-4 p-3 bg-gray-700/40 border border-gray-600/40 rounded-lg flex flex-wrap gap-6 items-center">
+      <div className="mb-4 p-3 bg-gray-700/40 border border-gray-600/40 rounded-lg grid grid-cols-2 sm:flex sm:flex-wrap gap-4 sm:gap-6 items-center">
         <div>
           <div className="text-xs text-gray-400 mb-0.5">Current Price</div>
           <div className="text-2xl font-bold text-white">{fmtPrice(d.price)}</div>
@@ -243,7 +243,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
           <div className="text-xs text-gray-400 mb-0.5">High / Low</div>
           <div className="text-sm text-white">{fmtPrice(d.high)} / {fmtPrice(d.low)}</div>
         </div>
-        <div className="ml-auto text-xs text-gray-500">{dataSource}</div>
+        <div className="col-span-2 sm:ml-auto text-xs text-gray-500 text-right sm:text-left">{dataSource}</div>
       </div>
     )
   }
@@ -399,12 +399,12 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex flex-wrap gap-1 mb-5 bg-gray-700/40 rounded-lg p-1">
+      <div className="flex overflow-x-auto whitespace-nowrap gap-1 mb-5 bg-gray-700/40 rounded-lg p-1 scrollbar-none scroll-smooth">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-purple-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-600'
@@ -448,7 +448,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
 // ─────────────────────────────────────────────────────
 
 const Header = ({ selectedStock, dataSource, onRefresh, verification, stocks = [], onSelectStock }) => (
-  <div className="flex items-center justify-between mb-4">
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
     <div className="flex flex-wrap items-center gap-2">
       <Brain className="w-5 h-5 text-purple-400" />
       <h3 className="text-lg font-semibold text-white">SeunBot Advanced Analysis</h3>
@@ -456,7 +456,7 @@ const Header = ({ selectedStock, dataSource, onRefresh, verification, stocks = [
         <select
           value={selectedStock || ''}
           onChange={(e) => onSelectStock && onSelectStock(e.target.value)}
-          className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-lg text-xs text-white font-semibold focus:outline-none focus:border-purple-500 cursor-pointer max-w-[200px]"
+          className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-xs text-white font-semibold focus:outline-none focus:border-purple-500 cursor-pointer max-w-[200px]"
         >
           {!selectedStock && <option value="">-- Select a Stock --</option>}
           {stocks.map(s => (
@@ -478,7 +478,7 @@ const Header = ({ selectedStock, dataSource, onRefresh, verification, stocks = [
         </span>
       )}
     </div>
-    <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto border-t sm:border-t-0 border-gray-700/50 pt-2 sm:pt-0">
       <span className="text-xs text-gray-500">{dataSource}</span>
       <button
         onClick={onRefresh}

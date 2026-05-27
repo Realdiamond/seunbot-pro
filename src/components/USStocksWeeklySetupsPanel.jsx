@@ -271,10 +271,10 @@ const USStocksWeeklySetupsPanel = () => {
 
   // ── Results ──────────────────────────────────────────
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
+    <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-2">
+      <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center gap-2">
           <Target className="h-5 w-5 text-orange-500" />
           <h3 className="text-lg font-semibold text-white">US Stocks Weekly High Probability Setups</h3>
           <div className="px-2 py-1 bg-orange-500/20 rounded text-xs text-orange-400">
@@ -346,7 +346,7 @@ const USStocksWeeklySetupsPanel = () => {
           <span className="text-white font-medium">Filters & Sorting</span>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           <div>
             <label className="text-xs text-gray-400 mb-1 block">Sector</label>
             <select
@@ -420,9 +420,9 @@ const USStocksWeeklySetupsPanel = () => {
                 <th className="text-left py-3 px-4 text-gray-300 font-medium">Stock</th>
                 <th className="text-left py-3 px-4 text-gray-300 font-medium">Setup</th>
                 <th className="text-left py-3 px-4 text-gray-300 font-medium">Probability</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">Price</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">Target</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">Stop Loss</th>
+                <th className="text-left py-3 px-4 text-gray-300 font-medium hidden sm:table-cell">Price</th>
+                <th className="text-left py-3 px-4 text-gray-300 font-medium hidden md:table-cell">Target</th>
+                <th className="text-left py-3 px-4 text-gray-300 font-medium hidden md:table-cell">Stop Loss</th>
                 <th className="text-left py-3 px-4 text-gray-300 font-medium">R:R</th>
                 <th className="text-right py-3 px-4 text-gray-300 font-medium">Actions</th>
               </tr>
@@ -451,6 +451,12 @@ const USStocksWeeklySetupsPanel = () => {
                         {setup.setupType}
                       </div>
                       <div className="text-xs text-gray-400">{setup.seunBotSignal}</div>
+                      {/* Render price details inline on mobile only */}
+                      <div className="text-[10px] text-gray-400 mt-1 sm:hidden flex flex-wrap gap-x-2">
+                        <span>Price: {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}</span>
+                        <span>|</span>
+                        <span>Target: {setup.targetPrice > 0 ? `$${setup.targetPrice.toFixed(2)}` : '—'}</span>
+                      </div>
                     </td>
                     
                     <td className="py-3 px-4">
@@ -468,13 +474,13 @@ const USStocksWeeklySetupsPanel = () => {
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 hidden sm:table-cell">
                       <div className="text-white font-medium">
                         {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 hidden md:table-cell">
                       <div className="flex items-center space-x-1">
                         <ArrowUp className="h-3 w-3 text-green-400" />
                         <span className="text-green-400 font-medium">
@@ -483,7 +489,7 @@ const USStocksWeeklySetupsPanel = () => {
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 hidden md:table-cell">
                       <div className="flex items-center space-x-1">
                         <ArrowDown className="h-3 w-3 text-red-400" />
                         <span className="text-red-400 font-medium">
