@@ -82,11 +82,11 @@ class USStocksDataService {
     // Try the primary endpoint: /api/UsPrediction/data-summary
     try {
       const response = await axios.get(`${this.assetsApiBaseUrl}/api/UsPrediction/data-summary`, {
-        timeout: 15000
+        timeout: 60000
       });
       const payload = response.data || {};
-      // Shape: { stocks: [{ symbol, name, recordCount, firstDate, lastDate, isReadyForPrediction }] }
-      const rawList = Array.isArray(payload.stocks) ? payload.stocks : [];
+      // Shape: { symbols: [{ symbol, name, recordCount, firstDate, lastDate, isReadyForPrediction }] }
+      const rawList = Array.isArray(payload.symbols) ? payload.symbols : [];
 
       const seen = new Map();
       for (const asset of rawList) {
@@ -114,10 +114,10 @@ class USStocksDataService {
     try {
       const response = await axios.get(`${this.assetsApiBaseUrl}/api/UsPrediction/stocks`, {
         params: { page: 1, pageSize: 500 },
-        timeout: 15000
+        timeout: 60000
       });
       const payload = response.data || {};
-      const rawList = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : []);
+      const rawList = Array.isArray(payload.stocks) ? payload.stocks : (Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : []));
 
       const seen = new Map();
       for (const asset of rawList) {
@@ -156,7 +156,7 @@ class USStocksDataService {
       try {
         const response = await axios.get(
           `${this.assetsApiBaseUrl}/api/UsPrediction/${normalized}`,
-          { timeout: 20000 }
+          { timeout: 60000 }
         );
 
         const data = response.data || {};
@@ -243,7 +243,7 @@ class USStocksDataService {
 
     try {
       const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets/live-prices`, {
-        timeout: 15000
+        timeout: 60000
       });
 
       const payload = response.data || {};
