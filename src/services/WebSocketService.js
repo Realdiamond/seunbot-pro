@@ -102,6 +102,9 @@ class WebSocketService {
     this._notifyStatus('polling');
     this._stopPolling();
 
+    // Don't start polling if nothing to watch
+    if (!symbols || symbols.length === 0) return;
+
     const pollFn = async () => {
       try {
         if (this.marketType === 'ngx') {
@@ -124,22 +127,24 @@ class WebSocketService {
             });
           });
         } else if (this.marketType === 'usstocks') {
+          // Single bulk call to /api/Assets/live-prices — far cheaper than one call per symbol
           const { default: USStocksDataService } = await import('./USStocksDataService');
-          const results = await USStocksDataService.fetchMultipleStocks(symbols);
-          results.forEach(stock => {
+          const livePrices = await USStocksDataService.fetchLivePrices(true);
+          const symbolSet = new Set(symbols);
+          livePrices.bySymbol.forEach((priceData, sym) => {
+            if (!symbolSet.has(sym)) return;
+            if (priceData.price == null) return;
             this._handlePriceUpdate({
-              symbol: stock.symbol,
-              price: stock.price,
-              volume: stock.volume,
-              open: stock.open,
-              high: stock.high,
-              low: stock.low,
-              previousClose: stock.previousClose,
-              change: stock.change,
-              changePercent: stock.changePercent,
+              symbol: sym,
+              price: priceData.price,
+              volume: priceData.volume,
+              high: priceData.high,
+              low: priceData.low,
+              previousClose: priceData.previousClose,
+              change: priceData.change,
+              changePercent: priceData.changePercent,
               timestamp: Date.now(),
-              source: 'SeunBot API Polling',
-              sources: stock.sources
+              source: 'Live Prices API'
             });
           });
         }
@@ -149,7 +154,10 @@ class WebSocketService {
     };
 
     pollFn();
-    const intervalId = setInterval(pollFn, 30000);
+    // usstocks: 60s (API is cached 60s server-side anyway, hitting faster is wasteful)
+    // ngx: 30s
+    const intervalMs = this.marketType === 'usstocks' ? 60000 : 30000;
+    const intervalId = setInterval(pollFn, intervalMs);
     this.pollingIntervals.set('main', intervalId);
   }
 

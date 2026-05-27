@@ -46,18 +46,16 @@ const USStocksDashboard = () => {
     });
   }, []);
 
+  // Track subscribed symbols so we can unsubscribe cleanly
+  const subscribedSymbolsRef = useRef([]);
+
   useEffect(() => {
     loadData();
-    // Fallback: refresh every 5 minutes for market summary
-    const interval = setInterval(async () => {
-      try {
-        const summary = await USStocksDataService.fetchMarketSummary();
-        setMarketSummary(summary);
-      } catch (e) { /* ignore */ }
-    }, 5 * 60 * 1000);
-
     return () => {
-      clearInterval(interval);
+      // Clean up all subscriptions
+      subscribedSymbolsRef.current.forEach(sym => {
+        usStocksWebSocket.unsubscribe(sym, handleWsUpdate);
+      });
       usStocksWebSocket.disconnect();
     };
   }, []);
@@ -72,17 +70,22 @@ const USStocksDashboard = () => {
       setStocks(stocksData);
       setMarketSummary(summary);
 
-      // Seed WebSocket cache with initial data and connect
-      usStocksWebSocket.seedCache(stocksData);
-      const symbols = stocksData.map(s => s.symbol);
+      // Unsubscribe old symbols first
+      subscribedSymbolsRef.current.forEach(sym => {
+        usStocksWebSocket.unsubscribe(sym, handleWsUpdate);
+      });
 
-      // Subscribe to all symbols for real-time updates
+      // Subscribe only to a capped number of symbols to avoid handler floods
+      // (live prices API returns bulk data anyway, not per-symbol streams)
+      const symbols = stocksData.map(s => s.symbol).slice(0, 50);
+      subscribedSymbolsRef.current = symbols;
       symbols.forEach(symbol => {
         usStocksWebSocket.subscribe(symbol, handleWsUpdate);
       });
 
-      // Connect WebSocket
+      usStocksWebSocket.seedCache(stocksData);
       usStocksWebSocket.onStatusChange(setWsStatus);
+      // Use polling with all symbols for live price refresh (every 30s via WebSocketService)
       usStocksWebSocket.connect('usstocks', symbols);
     } catch (error) {
       console.error('Error loading US Stocks data:', error);
