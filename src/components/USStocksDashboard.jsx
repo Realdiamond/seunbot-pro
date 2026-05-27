@@ -244,31 +244,32 @@ const USStocksDashboard = () => {
     <div className="min-h-screen bg-gray-900 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
-              <BarChart3 className="w-8 h-8 text-purple-400" />
-              US Stocks Dashboard
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3 truncate">
+              <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400 shrink-0" />
+              <span className="truncate">US Stocks Dashboard</span>
             </h1>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-              <p className="text-gray-400">Real-time data with SeunBot intelligence</p>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 mt-1">
+              <p className="text-xs sm:text-sm text-gray-400 truncate hidden xs:block">Real-time data with SeunBot intelligence</p>
               {wsStatus === 'connected' && (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
-                  <span className="relative flex h-2 w-2">
+                <span className="flex items-center gap-1.5 text-[10px] sm:text-xs font-medium text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full shrink-0">
+                  <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
                   </span>
                   Live
                 </span>
               )}
               {wsStatus === 'reconnecting' && (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1.5 text-[10px] sm:text-xs font-medium text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full shrink-0">
                   <WifiOff className="w-3 h-3" />
                   Reconnecting...
                 </span>
               )}
               {wsStatus === 'polling' && (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1.5 text-[10px] sm:text-xs font-medium text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full shrink-0">
                   <Wifi className="w-3 h-3" />
                   Polling (30s)
                 </span>
@@ -277,9 +278,9 @@ const USStocksDashboard = () => {
           </div>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-xs sm:text-sm text-white font-semibold transition-colors shrink-0"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
             Refresh
           </button>
         </div>
@@ -525,10 +526,38 @@ const USStocksDashboard = () => {
                                 </button>
                                 <span className="text-sm font-bold text-white">{stock.symbol}</span>
                                 {!stock.isMock && (
-                                  <span className="text-xs px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Live</span>
+                                  <span className="text-[10px] px-1 py-0.2 bg-green-500/20 text-green-400 rounded">Live</span>
                                 )}
                               </div>
                               <span className="text-[10px] text-gray-400 sm:hidden pl-7 truncate max-w-[120px]">{stock.name}</span>
+                              {viewMode === 'watchlist' ? (
+                                batchPredictions.has(stock.symbol) && (
+                                  <div className="pl-7 mt-0.5 sm:hidden">
+                                    {(() => {
+                                      const pred = batchPredictions.get(stock.symbol);
+                                      const recVal = pred.recommendation || 'HOLD';
+                                      const colors = {
+                                        BUY: 'bg-green-500/20 text-green-400 border border-green-500/30',
+                                        STRONG_BUY: 'bg-green-500 text-white font-bold border border-green-600',
+                                        SELL: 'bg-red-500/20 text-red-400 border border-red-500/30',
+                                        STRONG_SELL: 'bg-red-500 text-white font-bold border border-red-600',
+                                        HOLD: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                      };
+                                      return (
+                                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${colors[recVal] || colors.HOLD}`}>
+                                          {recVal}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                )
+                              ) : (
+                                <div className="pl-7 mt-0.5 sm:hidden">
+                                  <span className="text-[9px] px-1.5 py-0.2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
+                                    {stock.sector}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-4 sm:px-6 whitespace-nowrap hidden sm:table-cell">
@@ -566,6 +595,9 @@ const USStocksDashboard = () => {
                           </td>
                           <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-right">
                             <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
+                            <div className={`text-[10px] md:hidden ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}
+                            </div>
                           </td>
                           <td className="px-4 py-4 sm:px-6 whitespace-nowrap text-right hidden md:table-cell">
                             <div className={`text-sm font-semibold ${stock.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -589,10 +621,11 @@ const USStocksDashboard = () => {
                                 e.stopPropagation();
                                 handleStockClick(stock);
                               }}
-                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-xs transition-colors flex items-center gap-1 mx-auto"
+                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-xs transition-colors flex items-center gap-1 mx-auto"
+                              title="Analyze stock"
                             >
                               <Brain className="w-3 h-3" />
-                              Analyze
+                              <span className="hidden sm:inline">Analyze</span>
                             </button>
                           </td>
                         </tr>
@@ -614,11 +647,11 @@ const USStocksDashboard = () => {
                     <button
                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-700 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white disabled:opacity-40 disabled:hover:bg-gray-800 disabled:hover:text-gray-400 transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-gray-700 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white disabled:opacity-40 disabled:hover:bg-gray-800 disabled:hover:text-gray-400 transition-colors"
                     >
                       Previous
                     </button>
-                    <div className="flex items-center gap-1.5">
+                    <div className="hidden sm:flex items-center gap-1.5">
                       {getPageNumbers().map((p, idx) => (
                         p === '...' ? (
                           <span key={`ellipsis-${idx}`} className="px-2 py-1 text-gray-500">
@@ -639,10 +672,13 @@ const USStocksDashboard = () => {
                         )
                       ))}
                     </div>
+                    <span className="sm:hidden text-xs text-gray-400 font-medium px-1">
+                      Page {currentPage} of {totalPages}
+                    </span>
                     <button
                       onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-700 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white disabled:opacity-40 disabled:hover:bg-gray-800 disabled:hover:text-gray-400 transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-gray-700 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white disabled:opacity-40 disabled:hover:bg-gray-800 disabled:hover:text-gray-400 transition-colors"
                     >
                       Next
                     </button>
@@ -653,30 +689,30 @@ const USStocksDashboard = () => {
 
             {/* Top Gainers and Losers */}
             {stocks.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-3 sm:gap-6">
                 {/* Top Gainers */}
-                <div className="bg-gray-800 rounded-lg p-6">
-                  <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-green-400" />
-                    Top Gainers
+                <div className="bg-gray-800 rounded-lg p-3 sm:p-6">
+                  <h2 className="text-sm sm:text-xl font-semibold text-white mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-green-400 shrink-0" />
+                    <span className="truncate">Top Gainers</span>
                   </h2>
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {stocks
                       .sort((a, b) => b.changePercent - a.changePercent)
                       .slice(0, 5)
                       .map((stock) => (
                         <div
                           key={stock.symbol}
-                          className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer gap-1 sm:gap-2"
                           onClick={() => handleStockClick(stock)}
                         >
-                          <div>
-                            <div className="font-semibold text-white">{stock.symbol}</div>
-                            <div className="text-xs text-gray-400">{stock.name}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-white text-xs sm:text-sm truncate">{stock.symbol}</div>
+                            <div className="text-[10px] text-gray-400 truncate max-w-[70px] sm:max-w-none">{stock.name}</div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
-                            <div className="text-sm font-bold text-green-400">
+                          <div className="text-left sm:text-right shrink-0">
+                            <div className="text-xs sm:text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
+                            <div className="text-[10px] sm:text-sm font-bold text-green-400">
                               +{stock.changePercent.toFixed(2)}%
                             </div>
                           </div>
@@ -686,28 +722,28 @@ const USStocksDashboard = () => {
                 </div>
 
                 {/* Top Losers */}
-                <div className="bg-gray-800 rounded-lg p-6">
-                  <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                    <TrendingDown className="w-5 h-5 text-red-400" />
-                    Top Losers
+                <div className="bg-gray-800 rounded-lg p-3 sm:p-6">
+                  <h2 className="text-sm sm:text-xl font-semibold text-white mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
+                    <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />
+                    <span className="truncate">Top Losers</span>
                   </h2>
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {stocks
                       .sort((a, b) => a.changePercent - b.changePercent)
                       .slice(0, 5)
                       .map((stock) => (
                         <div
                           key={stock.symbol}
-                          className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors cursor-pointer gap-1 sm:gap-2"
                           onClick={() => handleStockClick(stock)}
                         >
-                          <div>
-                            <div className="font-semibold text-white">{stock.symbol}</div>
-                            <div className="text-xs text-gray-400">{stock.name}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-white text-xs sm:text-sm truncate">{stock.symbol}</div>
+                            <div className="text-[10px] text-gray-400 truncate max-w-[70px] sm:max-w-none">{stock.name}</div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
-                            <div className="text-sm font-bold text-red-400">
+                          <div className="text-left sm:text-right shrink-0">
+                            <div className="text-xs sm:text-sm font-semibold text-white">${stock.price.toFixed(2)}</div>
+                            <div className="text-[10px] sm:text-sm font-bold text-red-400">
                               {stock.changePercent.toFixed(2)}%
                             </div>
                           </div>
@@ -1086,7 +1122,7 @@ const StockAnalysisPanel = ({ stock }) => {
                           <a href={news.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-purple-400 hover:underline">
                             {news.title}
                           </a>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
                             news.sentimentLabel === 'BULLISH' ? 'bg-green-500/15 text-green-400' :
                             news.sentimentLabel === 'BEARISH' ? 'bg-red-500/15 text-red-400' :
                             'bg-yellow-500/15 text-yellow-400'
@@ -1200,7 +1236,7 @@ const StockAnalysisPanel = ({ stock }) => {
                     <th className="px-4 py-2">Date</th>
                     <th className="px-4 py-2">Price</th>
                     <th className="px-4 py-2">Rating</th>
-                    <th className="px-4 py-2">Scores (T / S / F)</th>
+                    <th className="px-4 py-2 hidden md:table-cell">Scores (T / S / F)</th>
                     <th className="px-4 py-2 text-right">Final</th>
                   </tr>
                 </thead>
@@ -1221,7 +1257,7 @@ const StockAnalysisPanel = ({ stock }) => {
                           {h.recommendation}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-[10px] text-gray-400">
+                      <td className="px-4 py-2.5 font-mono text-[10px] text-gray-400 hidden md:table-cell">
                         {h.technicalScore != null ? h.technicalScore.toFixed(2) : '—'} /{' '}
                         {h.sentimentScore != null ? h.sentimentScore.toFixed(2) : '—'} /{' '}
                         {h.fundamentalScore != null ? h.fundamentalScore.toFixed(2) : '—'}

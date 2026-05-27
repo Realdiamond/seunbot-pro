@@ -417,14 +417,14 @@ const USStocksWeeklySetupsPanel = () => {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-700/50 border-b border-gray-600">
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">Stock</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">Setup</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">Probability</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium hidden sm:table-cell">Price</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium hidden md:table-cell">Target</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium hidden md:table-cell">Stop Loss</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium">R:R</th>
-                <th className="text-right py-3 px-4 text-gray-300 font-medium">Actions</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Stock</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Setup</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Probability</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm hidden sm:table-cell">Price</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm hidden md:table-cell">Target</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm hidden md:table-cell">Stop Loss</th>
+                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">R:R</th>
+                <th className="text-right py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -439,32 +439,34 @@ const USStocksWeeklySetupsPanel = () => {
               ) : (
                 sortedSetups.map((setup, index) => (
                   <tr key={index} className="border-b border-gray-700 hover:bg-gray-700/20 transition-colors">
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-2 sm:px-4">
                       <div>
-                        <div className="text-white font-medium">{setup.symbol}</div>
-                        <div className="text-xs text-gray-400">{setup.sector}</div>
+                        <div className="text-white font-medium text-xs sm:text-sm">{setup.symbol}</div>
+                        <div className="text-[10px] text-gray-400">{setup.sector}</div>
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4">
-                      <div className={`font-medium text-sm ${getSetupTypeColor(setup.setupType)}`}>
+                    <td className="py-3 px-2 sm:px-4">
+                      <div className={`font-medium text-xs sm:text-sm ${getSetupTypeColor(setup.setupType)}`}>
                         {setup.setupType}
                       </div>
-                      <div className="text-xs text-gray-400">{setup.seunBotSignal}</div>
+                      <div className="text-[10px] text-gray-400">{setup.seunBotSignal}</div>
                       {/* Render price details inline on mobile only */}
                       <div className="text-[10px] text-gray-400 mt-1 sm:hidden flex flex-wrap gap-x-2">
                         <span>Price: {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}</span>
                         <span>|</span>
-                        <span>Target: {setup.targetPrice > 0 ? `$${setup.targetPrice.toFixed(2)}` : '—'}</span>
+                        <span>Tgt: {setup.targetPrice > 0 ? `$${setup.targetPrice.toFixed(2)}` : '—'}</span>
+                        <span>|</span>
+                        <span>SL: {setup.stopLoss > 0 ? `$${setup.stopLoss.toFixed(2)}` : '—'}</span>
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4">
-                      <div className="flex items-center space-x-2">
-                        <div className={`font-bold text-lg ${getConfidenceColor(setup.confidence)}`}>
+                    <td className="py-3 px-2 sm:px-4">
+                      <div className="flex items-center space-x-1 sm:space-x-2">
+                        <div className={`font-bold text-sm sm:text-lg ${getConfidenceColor(setup.confidence)}`}>
                           {setup.probability}%
                         </div>
-                        <div className={`text-xs px-2 py-1 rounded ${
+                        <div className={`text-[10px] px-1.5 py-0.5 rounded ${
                           setup.confidence === 'High' ? 'bg-green-500/20 text-green-400' :
                           setup.confidence === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
                           'bg-red-500/20 text-red-400'
@@ -474,32 +476,32 @@ const USStocksWeeklySetupsPanel = () => {
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4 hidden sm:table-cell">
-                      <div className="text-white font-medium">
+                    <td className="py-3 px-2 sm:px-4 hidden sm:table-cell">
+                      <div className="text-white font-medium text-xs sm:text-sm">
                         {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4 hidden md:table-cell">
+                    <td className="py-3 px-2 sm:px-4 hidden md:table-cell">
                       <div className="flex items-center space-x-1">
                         <ArrowUp className="h-3 w-3 text-green-400" />
-                        <span className="text-green-400 font-medium">
+                        <span className="text-green-400 font-medium text-xs sm:text-sm">
                           {setup.targetPrice > 0 ? `$${setup.targetPrice.toFixed(2)}` : '—'}
                         </span>
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4 hidden md:table-cell">
+                    <td className="py-3 px-2 sm:px-4 hidden md:table-cell">
                       <div className="flex items-center space-x-1">
                         <ArrowDown className="h-3 w-3 text-red-400" />
-                        <span className="text-red-400 font-medium">
+                        <span className="text-red-400 font-medium text-xs sm:text-sm">
                           {setup.stopLoss > 0 ? `$${setup.stopLoss.toFixed(2)}` : '—'}
                         </span>
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4">
-                      <div className={`font-bold text-lg ${
+                    <td className="py-3 px-2 sm:px-4">
+                      <div className={`font-bold text-sm sm:text-lg ${
                         parseFloat(setup.riskReward) >= 2 ? 'text-green-400' :
                         parseFloat(setup.riskReward) >= 1.5 ? 'text-yellow-400' : 'text-gray-400'
                       }`}>
@@ -507,7 +509,7 @@ const USStocksWeeklySetupsPanel = () => {
                       </div>
                     </td>
                     
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-2 sm:px-4 text-right">
                       <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => {

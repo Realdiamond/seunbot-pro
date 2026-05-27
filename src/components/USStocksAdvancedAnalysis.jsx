@@ -469,12 +469,13 @@ const Header = ({ selectedStock, dataSource, onRefresh, verification, stocks = [
         <span className="px-2 py-0.5 bg-purple-500/20 rounded text-xs text-purple-400 font-semibold">{selectedStock}</span>
       )}
       {verification && (
-        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+        <span className={`px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold ${
           verification.dataQuality === 'HIGH' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
           verification.dataQuality === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
           'bg-red-500/20 text-red-400 border border-red-500/30'
         }`}>
-          Data Quality: {verification.dataQuality || 'UNKNOWN'} ({verification.recordCount || 0} records)
+          <span className="hidden sm:inline">Data Quality:</span>
+          <span className="sm:hidden">DQ:</span> {verification.dataQuality || 'UNKNOWN'} ({verification.recordCount || 0} records)
         </span>
       )}
     </div>
@@ -952,23 +953,26 @@ const HistoryTab = ({ history }) => {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-700 text-gray-300 uppercase font-semibold">
             <tr>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Price</th>
-              <th className="px-4 py-3">SeunBot Recommendation</th>
-              <th className="px-4 py-3 text-right">Final Score</th>
+              <th className="px-2 py-3 sm:px-4 text-xs sm:text-sm">Date</th>
+              <th className="px-2 py-3 sm:px-4 text-xs sm:text-sm">Price</th>
+              <th className="px-2 py-3 sm:px-4 text-xs sm:text-sm">
+                <span className="hidden sm:inline">SeunBot Recommendation</span>
+                <span className="sm:hidden">Recommendation</span>
+              </th>
+              <th className="px-2 py-3 sm:px-4 text-right text-xs sm:text-sm hidden sm:table-cell">Final Score</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700 text-gray-300">
             {history.map((h, i) => (
               <tr key={i} className="hover:bg-gray-700/40">
-                <td className="px-4 py-3.5 font-medium whitespace-nowrap">
-                  {new Date(h.predictedAt || h.createdAt).toLocaleString()}
+                <td className="px-2 py-3 sm:px-4 font-medium whitespace-nowrap text-xs">
+                  {new Date(h.predictedAt || h.createdAt).toLocaleDateString()}
                 </td>
-                <td className="px-4 py-3.5 font-semibold text-white">
+                <td className="px-2 py-3 sm:px-4 font-semibold text-white text-xs">
                   ${(h.priceAtPrediction || h.suggestedEntry || 0).toFixed(2)}
                 </td>
-                <td className="px-4 py-3.5">
-                  <span className={`px-2.5 py-0.5 rounded-full font-bold border ${
+                <td className="px-2 py-3 sm:px-4 text-xs">
+                  <span className={`px-2 py-0.5 rounded-full font-bold border text-[10px] sm:text-xs ${
                     h.recommendation === 'BUY' ? 'bg-green-500/15 text-green-400 border-green-500/20' :
                     h.recommendation === 'SELL' ? 'bg-red-500/15 text-red-400 border-red-500/20' :
                     'bg-yellow-500/15 text-yellow-400 border-yellow-500/20'
@@ -976,7 +980,7 @@ const HistoryTab = ({ history }) => {
                     {h.recommendation}
                   </span>
                 </td>
-                <td className={`px-4 py-3.5 font-bold text-right ${h.finalScore >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <td className={`px-2 py-3 sm:px-4 font-bold text-right text-xs hidden sm:table-cell ${h.finalScore >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {h.finalScore != null ? (h.finalScore > 0 ? `+${h.finalScore.toFixed(3)}` : h.finalScore.toFixed(3)) : '—'}
                 </td>
               </tr>

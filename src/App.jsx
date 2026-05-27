@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useMemo, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import {
   BarChart3, Globe, MapPin, Target,
   Menu, X, Home, Brain, DollarSign
@@ -17,6 +17,7 @@ const USStocksAdvancedAnalysis = lazy(() => import('./components/USStocksAdvance
 const USStocksWeeklySetupsPanel = lazy(() => import('./components/USStocksWeeklySetupsPanel'))
 
 function App() {
+  const navigate = useNavigate()
   const enabledMarkets = useMemo(() => {
     const raw = import.meta.env.VITE_ENABLED_MARKETS || 'ngx'
     const requested = raw
@@ -54,6 +55,13 @@ function App() {
     if (!enabledMarkets.includes(market)) return
     setCurrentMarket(market)
     setSidebarOpen(false)
+    if (market === 'crypto') {
+      navigate('/')
+    } else if (market === 'usstocks') {
+      navigate('/usstocks')
+    } else if (market === 'ngx') {
+      navigate('/ngx')
+    }
   }
 
   const activeMarket = enabledMarkets.includes(currentMarket) ? currentMarket : defaultMarket
@@ -61,8 +69,7 @@ function App() {
   const fallbackRoute = hasCrypto ? '/' : hasNgx ? '/ngx' : '/usstocks'
 
   return (
-    <Router>
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
         {/* Mobile Menu Button */}
         <div className="lg:hidden fixed top-3 left-3 z-50">
           <button
@@ -323,7 +330,6 @@ function App() {
           </div>
         </div>
       </div>
-    </Router>
   )
 }
 
