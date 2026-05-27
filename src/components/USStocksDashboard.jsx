@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, RefreshCw, Search, Filter, Star, Brain, Target, Zap, Wifi, WifiOff } from 'lucide-react';
 import USStocksDataService from '../services/USStocksDataService';
-import AIStockAnalyzer from '../services/AIStockAnalyzer';
+
 import USStocksAdvancedAnalysis from './USStocksAdvancedAnalysis';
 import USStocksWeeklySetupsPanel from './USStocksWeeklySetupsPanel';
 import { usStocksWebSocket } from '../services/WebSocketService';
@@ -564,122 +564,195 @@ const USStocksDashboard = () => {
   );
 };
 
-// Stock Analysis Panel Component
+// Stock Analysis Panel Component — powered by GET /api/UsPrediction/{symbol}
 const StockAnalysisPanel = ({ stock }) => {
-  const [analysis, setAnalysis] = useState(null);
+  const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadAnalysis();
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setPrediction(null);
+
+    USStocksDataService.fetchUsPrediction(stock.symbol, { maxRetries: 2, retryDelayMs: 3000 })
+      .then(result => {
+        if (cancelled) return;
+        if (result?._isSyncing) {
+          setError('Data is still syncing for this symbol. Try again shortly.');
+        } else {
+          setPrediction(result);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) setError('Analysis temporarily unavailable.');
+        console.error('StockAnalysisPanel error:', err);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, [stock.symbol]);
 
-  const loadAnalysis = async () => {
-    setLoading(true);
-    try {
-      const result = await AIStockAnalyzer.analyzeStock(stock);
-      setAnalysis(result);
-    } catch (error) {
-      console.error('Error loading analysis:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const rec = prediction?.recommendation || 'HOLD';
+  const recColor = rec === 'BUY' ? 'text-green-400' : rec === 'SELL' ? 'text-red-400' : 'text-yellow-400';
+  const recBg   = rec === 'BUY' ? 'bg-green-500/10 border-green-500/30' : rec === 'SELL' ? 'bg-red-500/10 border-red-500/30' : 'bg-yellow-500/10 border-yellow-500/30';
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-700 rounded w-3/4 mb-4"></div>
-          <div className="h-4 bg-gray-700 rounded w-1/2 mb-2"></div>
-          <div className="h-32 bg-gray-700 rounded"></div>
-        </div>
+      <div className="space-y-4 animate-pulse">
+        <div className="h-4 bg-gray-700 rounded w-3/4"></div>
+        <div className="h-4 bg-gray-700 rounded w-1/2"></div>
+        <div className="h-32 bg-gray-700 rounded"></div>
+        <p className="text-center text-xs text-gray-500 mt-2">Fetching SeunBot analysis...</p>
       </div>
     );
   }
 
-  if (!analysis) {
+  if (error || !prediction) {
     return (
       <div className="text-center text-gray-400 py-8">
         <Brain className="w-12 h-12 mx-auto mb-2 opacity-50" />
-        <p>Analysis unavailable</p>
+        <p>{error || 'Analysis unavailable'}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Current Price */}
+      {/* Price bar */}
       <div className="bg-gray-700/50 rounded-lg p-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <div className="text-sm text-gray-400">Current Price</div>
-            <div className="text-2xl font-bold text-white">${stock.price.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-white">${(stock.price || prediction.currentPrice || 0).toFixed(2)}</div>
           </div>
           <div>
-            <div className="text-sm text-gray-400">Change</div>
+            <div className="text-sm text-gray-400">24h Change</div>
             <div className={`text-lg font-semibold ${stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+              {stock.changePercent >= 0 ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
             </div>
           </div>
           <div>
             <div className="text-sm text-gray-400">Volume</div>
             <div className="text-lg font-semibold text-white">
-              {(stock.volume / 1000000).toFixed(2)}M
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-400">Market Cap</div>
-            <div className="text-lg font-semibold text-white">
-              ${(stock.marketCap / 1000000000).toFixed(2)}B
+              {stock.volume > 0 ? `${(stock.volume / 1_000_000).toFixed(2)}M` : '—'}
             </div>
           </div>
         </div>
       </div>
 
-      {/* AI Recommendation */}
-      <div className="bg-gray-700/50 rounded-lg p-4">
+      {/* SeunBot Recommendation */}
+      <div className={`rounded-lg p-4 border ${recBg}`}>
         <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
           <Brain className="w-5 h-5 text-purple-400" />
-          AI Analysis
+          SeunBot Recommendation
         </h3>
-        <div className="space-y-3">
-          <div>
-            <span className="text-sm text-gray-400">Recommendation: </span>
-            <span className={`text-lg font-bold ${
-              analysis.recommendation === 'Buy' ? 'text-green-400' :
-              analysis.recommendation === 'Sell' ? 'text-red-400' :
-              'text-yellow-400'
-            }`}>
-              {analysis.recommendation}
-            </span>
-            <span className="ml-2 text-sm text-gray-400">
-              ({analysis.confidence}/5 confidence)
-            </span>
+        <div className="flex flex-wrap items-center gap-4 mb-3">
+          <span className={`text-2xl font-extrabold ${recColor}`}>{rec}</span>
+          <span className="text-sm text-gray-400">
+            Confidence: <strong className="text-white">{Math.round((prediction.confidence || 0) * 100)}%</strong>
+          </span>
+          <span className="text-sm text-gray-400">
+            Direction: <strong className="text-white">{prediction.direction || '—'}</strong>
+          </span>
+        </div>
+        {prediction.keyFactors?.length > 0 && (
+          <p className="text-sm text-gray-300 leading-relaxed">{prediction.keyFactors[0]}</p>
+        )}
+      </div>
+
+      {/* Trade Levels */}
+      {prediction.tradePlan && (
+        <div className="bg-gray-700/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <Target className="w-5 h-5 text-blue-400" />
+            Trade Levels
+          </h3>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Entry</div>
+              <div className="text-lg font-bold text-blue-400">
+                {prediction.tradePlan.entryPrice != null ? `$${prediction.tradePlan.entryPrice.toFixed(2)}` : '—'}
+              </div>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Stop Loss</div>
+              <div className="text-lg font-bold text-red-400">
+                {prediction.tradePlan.stopLoss != null ? `$${prediction.tradePlan.stopLoss.toFixed(2)}` : '—'}
+              </div>
+            </div>
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+              <div className="text-xs text-gray-400 mb-1">Take Profit</div>
+              <div className="text-lg font-bold text-green-400">
+                {prediction.tradePlan.takeProfit1 != null ? `$${prediction.tradePlan.takeProfit1.toFixed(2)}` : '—'}
+              </div>
+              {prediction.tradePlan.riskRewardRatio1 != null && (
+                <div className="text-xs text-gray-400 mt-1">R:R {prediction.tradePlan.riskRewardRatio1.toFixed(1)}</div>
+              )}
+            </div>
           </div>
-          <div>
-            <span className="text-sm text-gray-400">Sentiment: </span>
-            <span className="text-white font-semibold">{analysis.sentiment}</span>
-          </div>
-          <div>
-            <span className="text-sm text-gray-400">Price Target: </span>
-            <span className="text-white font-semibold">${analysis.priceTarget?.toFixed(2)}</span>
-          </div>
-          <p className="text-sm text-gray-300 leading-relaxed">{analysis.reasoning}</p>
+        </div>
+      )}
+
+      {/* Score Breakdown */}
+      <div className="bg-gray-700/50 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-white mb-3">Score Breakdown</h3>
+        <div className="space-y-2">
+          {[
+            { label: 'Technical', value: prediction.scores?.technical, color: 'bg-purple-500' },
+            { label: 'Sentiment', value: prediction.scores?.sentiment, color: 'bg-orange-500' },
+            { label: 'Fundamental', value: prediction.scores?.fundamental, color: 'bg-green-500' }
+          ].map(({ label, value, color }) => {
+            const pct = Math.min(100, Math.max(0, ((Number(value || 0) + 1) / 2) * 100));
+            return (
+              <div key={label}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-gray-400">{label}</span>
+                  <span className={Number(value) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {value != null ? (Number(value) > 0 ? `+${Number(value).toFixed(3)}` : Number(value).toFixed(3)) : '—'}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Key Insights */}
-      {analysis.insights && analysis.insights.length > 0 && (
+      {/* Key Factors */}
+      {prediction.keyFactors?.length > 0 && (
         <div className="bg-gray-700/50 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-white mb-3">Key Insights</h3>
+          <h3 className="text-lg font-semibold text-white mb-3">Key Factors</h3>
           <ul className="space-y-2">
-            {analysis.insights.map((insight, index) => (
-              <li key={index} className="flex items-start gap-2 text-sm text-gray-300">
-                <span className="text-purple-400 mt-1">•</span>
-                <span>{insight}</span>
+            {prediction.keyFactors.map((factor, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                <span className="text-purple-400 mt-0.5">•</span>
+                <span>{factor}</span>
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Risks */}
+      {prediction.risks?.length > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-yellow-400 mb-2">⚠️ Risk Factors</h3>
+          <ul className="space-y-1">
+            {prediction.risks.slice(0, 4).map((risk, i) => (
+              <li key={i} className="text-xs text-gray-300">• {risk}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Timestamp */}
+      {prediction.analyzedAt && (
+        <div className="text-xs text-gray-500 text-right">
+          Analyzed: {new Date(prediction.analyzedAt).toLocaleString()}
         </div>
       )}
     </div>

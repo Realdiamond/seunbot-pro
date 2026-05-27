@@ -27,80 +27,110 @@ const USStocksWeeklySetupsPanel = () => {
   const runScan = useCallback(async () => {
     setLoading(true)
     setWeeklySetups(null)
-    setScanProgress({ done: 0, total: 0 })
+    setScanProgress({ done: 0, total: 14 }) // watchlist is 14 stocks
 
     try {
-      // 1. Fetch asset list (fast, cached)
-      const stocks = await USStocksDataService.getAllStocks()
-      const candidates = stocks
-        .filter(s => s.isReadyForPrediction !== false)
-        .slice(0, 20) // hard cap — 20 stocks max
+      // Single call to POST /api/UsPrediction/watchlist/analyze (Ep.6)
+      // Returns buySignals[], sellSignals[], holdSignals[] — all pre-analyzed
+      setScanProgress({ done: 7, total: 14 })
+      const result = await USStocksDataService.analyzeWatchlist()
+      setScanProgress({ done: 14, total: 14 })
 
-      setScanProgress({ done: 0, total: candidates.length })
-
-      // 2. Fetch predictions 5 at a time (rate-limited concurrency)
       const highProbabilitySetups = []
-      const BATCH = 5
-      for (let i = 0; i < candidates.length; i += BATCH) {
-        const batch = candidates.slice(i, i + BATCH)
-        const results = await Promise.allSettled(
-          batch.map(stock =>
-            USStocksDataService.fetchUsPrediction(stock.symbol, { maxRetries: 0, retryDelayMs: 0 })
-              .then(pred => ({ stock, pred }))
-          )
-        )
 
-        for (const result of results) {
-          if (result.status !== 'fulfilled') continue
-          const { stock, pred } = result.value
-          if (!pred || pred._isSyncing) continue
+      // Process BUY signals
+      for (const pred of result.buySignals || []) {
+        if (!pred || pred._isSyncing) continue
+        const setup = buildSetup(pred)
+        if (setup) highProbabilitySetups.push(setup)
+      }
 
-          const absScore = Math.abs(Number(pred.finalScore) || 0)
-          if (absScore < 0.5) continue
-
-          const direction = pred.direction || 'NEUTRAL'
-          const setupType = determineSetupType(pred)
-          const tradePlan = pred.tradePlan
-          const currentPrice = pred.currentPrice || stock.price || 0
-          const targetPrice = tradePlan?.takeProfit1 || currentPrice * 1.15
-          const stopLoss = tradePlan?.stopLoss || currentPrice * 0.95
-          const probability = Math.min(95, Math.round(60 + (absScore / 3) * 35))
-          const confidence = probability >= 80 ? 'High' : probability >= 70 ? 'Medium' : 'Low'
-
-          highProbabilitySetups.push({
-            symbol: stock.symbol,
-            sector: stock.sector || 'Unknown',
-            setupType,
-            probability,
-            confidence,
-            currentPrice,
-            targetPrice,
-            stopLoss,
-            riskReward: calcRR(currentPrice, targetPrice, stopLoss),
-            volume: stock.volume || 0,
-            timeframe: '1W',
-            seunBotSignal: pred.overallMtfSignal || direction,
-            weeklySetupName: pred.weeklyTradeSetup?.setupName,
-            finalScore: pred.finalScore,
-            isMock: false
-          })
-        }
-
-        setScanProgress(prev => ({ ...prev, done: Math.min(prev.total, i + BATCH) }))
+      // Process SELL signals
+      for (const pred of result.sellSignals || []) {
+        if (!pred || pred._isSyncing) continue
+        const setup = buildSetup(pred)
+        if (setup) highProbabilitySetups.push(setup)
       }
 
       setWeeklySetups({
         setups: highProbabilitySetups.sort((a, b) => b.probability - a.probability),
-        totalScanned: candidates.length,
+        totalScanned: result.totalStocks || 14,
         highProbabilityCount: highProbabilitySetups.length,
-        scanTime: new Date().toISOString()
+        scanTime: result.analyzedAt || new Date().toISOString(),
+        durationSeconds: result.durationSeconds
       })
     } catch (error) {
       console.error('Error running weekly setups scan:', error)
+      // Fallback: run individual predictions on the first 10 ready stocks
+      try {
+        const stocks = await USStocksDataService.getAllStocks()
+        const candidates = stocks.filter(s => s.isReadyForPrediction !== false).slice(0, 10)
+        setScanProgress({ done: 0, total: candidates.length })
+        const highProbabilitySetups = []
+
+        const results = await Promise.allSettled(
+          candidates.map(stock =>
+            USStocksDataService.fetchUsPrediction(stock.symbol, { maxRetries: 0, retryDelayMs: 0 })
+              .then(pred => ({ stock, pred }))
+          )
+        )
+        setScanProgress({ done: candidates.length, total: candidates.length })
+
+        for (const r of results) {
+          if (r.status !== 'fulfilled') continue
+          const { stock, pred } = r.value
+          if (!pred || pred._isSyncing || pred.recommendation === 'HOLD') continue
+          const setup = buildSetup(pred, stock)
+          if (setup) highProbabilitySetups.push(setup)
+        }
+
+        setWeeklySetups({
+          setups: highProbabilitySetups.sort((a, b) => b.probability - a.probability),
+          totalScanned: candidates.length,
+          highProbabilityCount: highProbabilitySetups.length,
+          scanTime: new Date().toISOString()
+        })
+      } catch (fallbackErr) {
+        console.error('Fallback scan also failed:', fallbackErr)
+      }
     } finally {
       setLoading(false)
     }
   }, [])
+
+  // Build a setup entry from a normalized prediction
+  const buildSetup = (pred, stockOverride = null) => {
+    const rec = String(pred.recommendation || 'HOLD').toUpperCase()
+    if (rec === 'HOLD') return null  // Skip HOLDs — they aren't setups
+
+    const currentPrice = pred.currentPrice || stockOverride?.price || 0
+    const tradePlan = pred.tradePlan
+    const targetPrice = tradePlan?.takeProfit1 || (rec === 'BUY' ? currentPrice * 1.15 : currentPrice * 0.85)
+    const stopLoss = tradePlan?.stopLoss || (rec === 'BUY' ? currentPrice * 0.95 : currentPrice * 1.05)
+    const confidence = pred.confidence || 0
+    const probability = Math.min(95, Math.max(55, Math.round(confidence * 100)))
+    const confidenceLabel = probability >= 80 ? 'High' : probability >= 65 ? 'Medium' : 'Low'
+
+    return {
+      symbol: pred.symbol,
+      sector: stockOverride?.sector || 'US',
+      setupType: determineSetupType(pred),
+      probability,
+      confidence: confidenceLabel,
+      currentPrice,
+      targetPrice,
+      stopLoss,
+      riskReward: calcRR(currentPrice, targetPrice, stopLoss),
+      volume: stockOverride?.volume || 0,
+      timeframe: '1W',
+      seunBotSignal: pred.overallMtfSignal || pred.direction || rec,
+      weeklySetupName: rec,
+      finalScore: pred.finalScore,
+      isMock: false
+    }
+  }
+
+
 
   const determineSetupType = (pred) => {
     const dir = String(pred?.direction || '').toUpperCase()

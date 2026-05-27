@@ -380,7 +380,7 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) 
             prediction={prediction}
           />
         )}
-        {activeTab === 'indicators' && <IndicatorsTab ind={ind} />}
+        {activeTab === 'indicators' && <IndicatorsTab ind={ind} prediction={prediction} />}
         {activeTab === 'tradePlan' && <TradePlanTab tradePlan={tradePlan} prediction={prediction} />}
         {activeTab === 'patterns' && (
           <PatternsTab
@@ -421,84 +421,94 @@ const Header = ({ selectedStock, dataSource, onRefresh }) => (
 
 const OverviewTab = ({ weeklySetup, geometricPattern, elliottWave, prediction }) => (
   <div className="space-y-4">
-    {/* Weekly Trade Setup */}
-    {weeklySetup && (
+    {/* Score breakdown — available from API */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {[
+        { label: 'Technical Score', value: prediction?.scores?.technical, color: 'purple', icon: Activity },
+        { label: 'Sentiment Score', value: prediction?.scores?.sentiment, color: 'orange', icon: Globe },
+        { label: 'Fundamental Score', value: prediction?.scores?.fundamental, color: 'green', icon: DollarSign }
+      ].map(({ label, value, color, icon: Icon }) => {
+        const n = Number(value ?? 0);
+        const pct = Math.min(100, Math.max(0, ((n + 1) / 2) * 100));
+        const colorMap = { purple: 'text-purple-400 bg-purple-500', orange: 'text-orange-400 bg-orange-500', green: 'text-green-400 bg-green-500' };
+        const [textColor, bgColor] = colorMap[color].split(' ');
+        return (
+          <div key={label} className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+            <div className="flex items-center gap-2 mb-2">
+              <Icon className={`w-4 h-4 ${textColor}`} />
+              <span className="text-sm text-gray-400">{label}</span>
+            </div>
+            <div className={`text-2xl font-bold ${n >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {n > 0 ? `+${n.toFixed(3)}` : n.toFixed(3)}
+            </div>
+            <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${bgColor}`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {/* Hybrid signal indicators */}
+    {prediction?.breakdown?.technicalIndicators && (
       <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
         <h4 className="text-white font-medium mb-3 flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-blue-400" />
-          Weekly Trade Setup
+          <Zap className="w-4 h-4 text-yellow-400" />
+          Technical Signal Breakdown
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-gray-800/60 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Setup Name</div>
-            <div className={`text-base font-bold ${weeklySetup.setupName === 'Bull' ? 'text-green-400' : weeklySetup.setupName === 'Bear' ? 'text-red-400' : 'text-yellow-400'}`}>
-              {weeklySetup.setupName || '—'}
-            </div>
-          </div>
-          <div className="bg-gray-800/60 rounded-lg p-3 md:col-span-2">
-            <div className="text-xs text-gray-400 mb-1">Description</div>
-            <div className="text-sm text-white">{weeklySetup.description || '—'}</div>
-          </div>
-          <div className="bg-gray-800/60 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Setup Confidence</div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-gray-700 rounded-full">
-                <div
-                  className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${Math.round((weeklySetup.setupConfidence || 0) * 100)}%` }}
-                />
-              </div>
-              <span className="text-sm font-semibold text-blue-400">
-                {Math.round((weeklySetup.setupConfidence || 0) * 100)}%
-              </span>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {Object.entries(prediction.breakdown.technicalIndicators)
+            .filter(([k]) => !k.toLowerCase().includes('signal') && !k.toLowerCase().includes('strong'))
+            .map(([key, val]) => {
+              const n = Number(val);
+              if (!Number.isFinite(n)) return null;
+              return (
+                <div key={key} className="bg-gray-800/60 rounded-lg p-3">
+                  <div className="text-xs text-gray-400 mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                  <div className={`text-base font-bold ${n >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {n > 0 ? `+${n.toFixed(3)}` : n.toFixed(3)}
+                  </div>
+                </div>
+              );
+            })
+          }
         </div>
       </div>
     )}
 
-    {/* Geometric Pattern */}
-    {geometricPattern && (
+    {/* Key Factors */}
+    {prediction?.keyFactors?.length > 0 && (
       <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
         <h4 className="text-white font-medium mb-3 flex items-center gap-2">
-          <Triangle className="w-4 h-4 text-orange-400" />
-          Chart Pattern
+          <CheckCircle className="w-4 h-4 text-green-400" />
+          Key Factors
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-gray-800/60 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Pattern</div>
-            <div className="text-base font-bold text-orange-400">{geometricPattern.name || '—'}</div>
-          </div>
-          <div className="bg-gray-800/60 rounded-lg p-3">
-            <div className="text-xs text-gray-400 mb-1">Confidence</div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-gray-700 rounded-full">
-                <div
-                  className="h-full bg-orange-500 rounded-full"
-                  style={{ width: `${Math.round((geometricPattern.confidence || 0) * 100)}%` }}
-                />
-              </div>
-              <span className="text-sm font-semibold text-orange-400">
-                {Math.round((geometricPattern.confidence || 0) * 100)}%
-              </span>
-            </div>
-          </div>
-          <div className="bg-gray-800/60 rounded-lg p-3 md:col-span-3">
-            <div className="text-xs text-gray-400 mb-1">Description</div>
-            <div className="text-sm text-gray-300">{geometricPattern.description || '—'}</div>
-          </div>
-        </div>
+        <ul className="space-y-2">
+          {prediction.keyFactors.map((f, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+              <span className="text-green-400 mt-0.5">•</span>
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     )}
 
-    {/* Elliott Wave */}
-    {elliottWave && elliottWave !== 'No clear Elliott Wave pattern' && (
-      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-        <h4 className="text-white font-medium mb-2 flex items-center gap-2">
-          <Waves className="w-4 h-4 text-purple-400" />
-          Elliott Wave Pattern
+    {/* Risk Factors */}
+    {prediction?.risks?.length > 0 && (
+      <div className="p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+        <h4 className="text-yellow-400 font-medium mb-3 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          Risk Factors
         </h4>
-        <div className="text-sm text-gray-300">{elliottWave}</div>
+        <ul className="space-y-2">
+          {prediction.risks.map((r, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+              <span className="text-yellow-400 mt-0.5">•</span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     )}
 
@@ -512,99 +522,50 @@ const OverviewTab = ({ weeklySetup, geometricPattern, elliottWave, prediction })
   </div>
 )
 
-const IndicatorsTab = ({ ind }) => {
-  const macd = ind?.macd || {}
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* RSI */}
-        <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-          <h4 className="text-white font-medium mb-3">RSI (14)</h4>
-          <RsiGauge value={ind?.rsi} />
-          <div className="mt-3 text-2xl font-bold text-center">
-            <span className={ind?.rsi < 30 ? 'text-green-400' : ind?.rsi > 70 ? 'text-red-400' : 'text-yellow-400'}>
-              {fmt2(ind?.rsi)}
-            </span>
-          </div>
+const IndicatorsTab = ({ ind, prediction }) => (
+  <div className="space-y-4">
+    {/* Hybrid Score indicators from breakdown.technicalIndicators */}
+    {prediction?.breakdown?.technicalIndicators ? (
+      <>
+        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-xs text-blue-300">
+            ℹ️ RSI, ADX, ATR and MACD raw values are not included in the current API response.
+            Showing SeunBot's internal composite indicator scores instead.
+          </p>
         </div>
-
-        {/* ADX */}
-        <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-          <h4 className="text-white font-medium mb-3">ADX (Trend Strength)</h4>
-          <div className="text-xs text-gray-400 mb-2 flex justify-between">
-            <span>Ranging (&lt;20)</span>
-            <span>Trending (&gt;25)</span>
-          </div>
-          <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${ind?.adx > 25 ? 'bg-purple-500' : 'bg-gray-500'}`}
-              style={{ width: `${Math.min(100, Number(ind?.adx) || 0)}%` }}
-            />
-          </div>
-          <div className="mt-3 text-2xl font-bold text-center">
-            <span className={ind?.adx > 25 ? 'text-purple-400' : 'text-gray-400'}>
-              {fmt2(ind?.adx)}
-            </span>
-          </div>
-          <div className="text-xs text-center text-gray-500 mt-1">
-            {ind?.adx > 40 ? 'Very Strong Trend' : ind?.adx > 25 ? 'Trending' : ind?.adx > 20 ? 'Weak Trend' : 'Ranging / Choppy'}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.entries(prediction.breakdown.technicalIndicators).map(([key, val]) => {
+            const n = Number(val);
+            if (!Number.isFinite(n)) return null;
+            const isSignal = key.toLowerCase().includes('signal') || key.toLowerCase().includes('strong');
+            if (isSignal) return (
+              <div key={key} className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+                <h4 className="text-sm text-gray-400 mb-2">{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
+                <div className="text-lg font-bold text-white">{String(val)}</div>
+              </div>
+            );
+            const pct = Math.min(100, Math.max(0, ((n + 1) / 2) * 100));
+            return (
+              <div key={key} className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+                <ScoreBar
+                  label={key.replace(/([A-Z])/g, ' $1').trim()}
+                  value={n}
+                  max={1}
+                  color={n >= 0 ? 'green' : 'orange'}
+                />
+              </div>
+            );
+          })}
         </div>
+      </>
+    ) : (
+      <div className="flex flex-col items-center justify-center h-40 gap-3">
+        <Activity className="w-12 h-12 text-gray-600" />
+        <p className="text-gray-400 text-center">Technical indicator details not available from the current API response.</p>
       </div>
-
-      {/* ATR */}
-      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-        <h4 className="text-white font-medium mb-3">ATR (Average True Range)</h4>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-gray-400">ATR Value (Volatility)</div>
-            <div className="text-2xl font-bold text-blue-400">{fmt2(ind?.atr)}</div>
-            <div className="text-xs text-gray-500 mt-1">Daily average price range</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400">Volatility Level</div>
-            <div className={`text-lg font-semibold ${ind?.atr > 50 ? 'text-red-400' : ind?.atr > 20 ? 'text-yellow-400' : 'text-green-400'}`}>
-              {ind?.atr > 50 ? '🔴 High' : ind?.atr > 20 ? '🟡 Medium' : '🟢 Low'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* MACD */}
-      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-blue-400" />
-          MACD
-          {macd.status && (
-            <span className={`text-xs px-2 py-0.5 rounded-full ${
-              macd.status === 'Bullish' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-            }`}>
-              {macd.status}
-            </span>
-          )}
-        </h4>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
-            <div className="text-xs text-gray-400 mb-1">MACD Line</div>
-            <div className={`text-lg font-bold ${Number(macd.macdLine) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {fmt2(macd.macdLine)}
-            </div>
-          </div>
-          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
-            <div className="text-xs text-gray-400 mb-1">Signal Line</div>
-            <div className="text-lg font-bold text-blue-400">{fmt2(macd.signalLine)}</div>
-          </div>
-          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
-            <div className="text-xs text-gray-400 mb-1">Histogram</div>
-            <div className={`text-lg font-bold ${Number(macd.histogram) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {fmt2(macd.histogram)}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+    )}
+  </div>
+)
 
 const TradePlanTab = ({ tradePlan, prediction }) => {
   if (!tradePlan) {
