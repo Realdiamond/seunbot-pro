@@ -90,10 +90,16 @@ class RealNGXDataService {
 
     const raw = Array.isArray(response.data?.data) ? response.data.data : [];
 
+    // Filter to keep ONLY NGX assets!
+    const ngxRaw = raw.filter(asset => 
+      asset.exchange === 'NSENG' || 
+      String(asset.symbol).startsWith('NSENG_')
+    );
+
     // Deduplicate: API returns both bare symbols (DANGCEM) and NSENG_-prefixed
     // (NSENG_DANGCEM) for the same stock. Prefer the NSENG_ version (richer metadata).
     const seen = new Map();
-    for (const asset of raw) {
+    for (const asset of ngxRaw) {
       const normalized = this.normalizeAssetSymbol(asset.symbol);
       if (!normalized) continue;
       const existing = seen.get(normalized);
@@ -462,7 +468,14 @@ class RealNGXDataService {
         })
         .map((asset) => this.toNsengSymbol(asset.symbol));
 
-      const predictionFallbackMap = await this.fetchPredictionPricesForSymbols(symbolsMissingLivePrice);
+      // Limit bulk prediction fallback requests to avoid performance lock/hang.
+      // If there are too many symbols missing live prices, skip bulk predictions on load.
+      let predictionFallbackMap = new Map();
+      if (symbolsMissingLivePrice.length > 0 && symbolsMissingLivePrice.length <= 15) {
+        predictionFallbackMap = await this.fetchPredictionPricesForSymbols(symbolsMissingLivePrice);
+      } else if (symbolsMissingLivePrice.length > 15) {
+        console.warn(`⚠️ ${symbolsMissingLivePrice.length} symbols missing live prices. Skipping bulk prediction fallback to prevent performance lock.`);
+      }
 
       return assets.map((asset) => {
         const normalized = this.normalizeAssetSymbol(asset.symbol);
