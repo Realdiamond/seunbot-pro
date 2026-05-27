@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchCryptoDashboard } from '../services/CryptoAPIService'
 
-const REFRESH_MS = 60 * 1000 // 60 seconds
+const REFRESH_MS = 90 * 1000 // 90 seconds — server caches for 60s so polling faster is wasteful
 
 export function useCryptoDashboard() {
   const [market, setMarket] = useState([])

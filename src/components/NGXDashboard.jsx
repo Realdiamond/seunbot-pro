@@ -87,6 +87,12 @@ const NGXDashboard = () => {
     }
   }, [])
 
+  const [visibleCount, setVisibleCount] = useState(30)
+
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [searchTerm, selectedSector, selectedType, viewMode])
+
   const loadNGXData = async () => {
     setLoading(true)
     try {
@@ -509,75 +515,91 @@ const NGXDashboard = () => {
               </div>
 
               {/* Stock List */}
-                <div className="space-y-2 max-h-[60vh] lg:max-h-96 overflow-y-auto">
-                {(viewMode === 'watchlist' 
+              {(() => {
+                const list = viewMode === 'watchlist' 
                   ? allStocks.filter(stock => watchlist.includes(stock.symbol))
-                  : filteredStocks
-                ).map((stock) => {
-                  const SectorIcon = getSectorIcon(stock.sector)
-                  return (
-                    <div
-                      key={stock.symbol}
-                      onClick={() => setSelectedStock(stock.symbol)}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                        selectedStock === stock.symbol
-                          ? 'bg-green-500/20 border border-green-500/40'
-                          : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2 min-w-0">
-                          <div className="relative h-5 w-5 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            <SectorIcon className="h-3.5 w-3.5 text-gray-400" />
-                            {stock.imageUrl && (
-                              <img
-                                src={stock.imageUrl}
-                                alt={`${stock.symbol} logo`}
-                                className="absolute inset-0 h-full w-full object-cover"
-                                onError={(e) => { e.currentTarget.style.display = 'none' }}
-                              />
+                  : filteredStocks;
+                return (
+                  <>
+                    <div className="space-y-2 max-h-[60vh] lg:max-h-96 overflow-y-auto">
+                      {list.slice(0, visibleCount).map((stock) => {
+                        const SectorIcon = getSectorIcon(stock.sector)
+                        return (
+                          <div
+                            key={stock.symbol}
+                            onClick={() => setSelectedStock(stock.symbol)}
+                            className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                              selectedStock === stock.symbol
+                                ? 'bg-green-500/20 border border-green-500/40'
+                                : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2 min-w-0">
+                                <div className="relative h-5 w-5 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  <SectorIcon className="h-3.5 w-3.5 text-gray-400" />
+                                  {stock.imageUrl && (
+                                    <img
+                                      src={stock.imageUrl}
+                                      alt={`${stock.symbol} logo`}
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                    />
+                                  )}
+                                </div>
+                                <span className="font-medium text-white truncate">{stock.symbol}</span>
+                                {stock.type === 'ETF' && (
+                                  <span className="text-xs px-1 py-0.5 bg-purple-500/20 text-purple-400 rounded">ETF</span>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (watchlist.includes(stock.symbol)) {
+                                      removeFromWatchlist(stock.symbol)
+                                    } else {
+                                      addToWatchlist(stock.symbol)
+                                    }
+                                  }}
+                                  className="ml-auto flex-shrink-0"
+                                >
+                                  <Star className={`h-4 w-4 ${
+                                    watchlist.includes(stock.symbol) ? 'text-yellow-400 fill-current' : 'text-gray-400'
+                                  }`} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm text-white font-medium">
+                                ₦{stock.price.toFixed(2)}
+                              </div>
+                              <div className={`text-sm ${
+                                stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'
+                              }`}>
+                                {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                              </div>
+                            </div>
+                            {stock.sources && stock.sources.length > 0 && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Sources: {stock.sources.length}
+                              </div>
                             )}
                           </div>
-                          <span className="font-medium text-white truncate">{stock.symbol}</span>
-                          {stock.type === 'ETF' && (
-                            <span className="text-xs px-1 py-0.5 bg-purple-500/20 text-purple-400 rounded">ETF</span>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (watchlist.includes(stock.symbol)) {
-                                removeFromWatchlist(stock.symbol)
-                              } else {
-                                addToWatchlist(stock.symbol)
-                              }
-                            }}
-                            className="ml-auto flex-shrink-0"
-                          >
-                            <Star className={`h-4 w-4 ${
-                              watchlist.includes(stock.symbol) ? 'text-yellow-400 fill-current' : 'text-gray-400'
-                            }`} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-white font-medium">
-                          ₦{stock.price.toFixed(2)}
-                        </div>
-                        <div className={`text-sm ${
-                          stock.changePercent >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                        </div>
-                      </div>
-                      {stock.sources && stock.sources.length > 0 && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Sources: {stock.sources.length}
-                        </div>
-                      )}
+                        )
+                      })}
                     </div>
-                  )
-                })}
-              </div>
+                    {list.length > visibleCount && (
+                      <div className="flex items-center justify-center pt-3 mt-2 border-t border-gray-700 bg-gray-800/10">
+                        <button
+                          onClick={() => setVisibleCount(c => c + 30)}
+                          className="px-4 py-2 text-xs text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-lg transition-colors"
+                        >
+                          Show more ({list.length - visibleCount} remaining)
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
 
             {/* Top Movers */}

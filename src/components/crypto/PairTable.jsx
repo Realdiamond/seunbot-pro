@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, memo } from 'react'
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import CoinBadge from './CoinBadge'
 import { fmtPrice, fmtVol, coinSymbol, Skeleton } from './utils'
@@ -16,7 +16,8 @@ function SortTh({ col, label, sortBy, sortDir, onSort, align = 'right' }) {
   )
 }
 
-function PairRow({ item, rank, selected, onSelect }) {
+// memo — only re-renders when its own props change, not when parent re-renders
+const PairRow = memo(function PairRow({ item, rank, selected, onSelect }) {
   const pct = item.priceChangePercent24h ?? 0
   const up  = pct >= 0
   return (
@@ -48,9 +49,17 @@ function PairRow({ item, rank, selected, onSelect }) {
       </td>
     </tr>
   )
-}
+})
+
+const PAGE_SIZE = 30
 
 export default function PairTable({ rows, loading, sortBy, sortDir, onSort, selectedCoin, onSelect }) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Reset visible count when rows change (new search / sort)
+  const visibleRows = rows.slice(0, visibleCount)
+  const hasMore = rows.length > visibleCount
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -73,7 +82,7 @@ export default function PairTable({ rows, loading, sortBy, sortDir, onSort, sele
                   ))}
                 </tr>
               ))
-            : rows.map((item, idx) => (
+            : visibleRows.map((item, idx) => (
                 <PairRow
                   key={item.symbol}
                   item={item}
@@ -90,6 +99,18 @@ export default function PairTable({ rows, loading, sortBy, sortDir, onSort, sele
           )}
         </tbody>
       </table>
+
+      {/* Load more — avoids rendering hundreds of DOM nodes at once */}
+      {!loading && hasMore && (
+        <div className="flex items-center justify-center py-4 border-t border-white/5">
+          <button
+            onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+            className="px-5 py-2 text-sm text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            Show more ({rows.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
     </div>
   )
 }

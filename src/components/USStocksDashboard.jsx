@@ -18,12 +18,18 @@ const USStocksDashboard = () => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [wsStatus, setWsStatus] = useState('disconnected');
+  const [visibleCount, setVisibleCount] = useState(30);
   const stocksRef = useRef([]);
 
   // Keep ref in sync with state for WebSocket callbacks
   useEffect(() => {
     stocksRef.current = stocks;
   }, [stocks]);
+
+  // Reset pagination when filter/sort changes
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [searchTerm, selectedSector, sortBy, sortOrder]);
 
   // WebSocket price update handler
   const handleWsUpdate = useCallback((update) => {
@@ -375,7 +381,7 @@ const USStocksDashboard = () => {
                         </td>
                       </tr>
                     ) : (
-                      filteredStocks.map((stock) => (
+                      filteredStocks.slice(0, visibleCount).map((stock) => (
                         <tr
                           key={stock.symbol}
                           className="hover:bg-gray-700/50 transition-colors cursor-pointer"
@@ -434,6 +440,16 @@ const USStocksDashboard = () => {
                   </tbody>
                 </table>
               </div>
+              {filteredStocks.length > visibleCount && (
+                <div className="flex items-center justify-center py-4 border-t border-gray-700 bg-gray-800/40">
+                  <button
+                    onClick={() => setVisibleCount(c => c + 30)}
+                    className="px-5 py-2 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                  >
+                    Show more ({filteredStocks.length - visibleCount} remaining)
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Top Gainers and Losers */}
