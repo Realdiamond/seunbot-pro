@@ -1,741 +1,782 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { 
-  Brain, TrendingUp, TrendingDown, Activity, Volume2, 
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import {
+  Brain, TrendingUp, TrendingDown, Activity, Volume2,
   BarChart3, Zap, Target, AlertTriangle, CheckCircle,
   Clock, DollarSign, Percent, Eye, RefreshCw, Waves,
-  Triangle, Square, Circle, Hexagon, Diamond, Star,
-  Globe, Calendar, Moon, Sun, Compass, Orbit
+  Triangle, Square, Hexagon, Globe, Calendar, Compass,
+  ArrowUpRight, ArrowDownRight, Minus, FileText, Shield, Loader
 } from 'lucide-react'
 import USStocksDataService from '../services/USStocksDataService'
 import { usStocksWebSocket } from '../services/WebSocketService'
 
-const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
-  const [activeTab, setActiveTab] = useState('smartMoney')
-  const [selectedTimeframe, setSelectedTimeframe] = useState('1D')
-  const [analysis, setAnalysis] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [realTimeData, setRealTimeData] = useState(null)
-  const [dataSource, setDataSource] = useState('Loading...')
+// ─────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────
+const fmt2 = (n) => (n == null ? '—' : Number(n).toFixed(2))
+const fmtPct = (n) => (n == null ? '—' : `${Number(n).toFixed(2)}%`)
+const fmtPrice = (n) => (n == null ? '—' : `$${Number(n).toFixed(2)}`)
+const fmtScore = (n) => (n == null ? '—' : (Number(n) > 0 ? `+${Number(n).toFixed(3)}` : Number(n).toFixed(3)))
 
-  // Subscribe to WebSocket updates for the selected stock
+const directionColor = (dir) => {
+  const d = String(dir || '').toUpperCase()
+  if (d.includes('STRONG BUY') || d === 'STRONG BUY') return 'text-emerald-400'
+  if (d === 'BUY') return 'text-green-400'
+  if (d.includes('STRONG SELL') || d === 'STRONG SELL') return 'text-rose-500'
+  if (d === 'SELL') return 'text-red-400'
+  return 'text-yellow-400'
+}
+
+const SignalBadge = ({ signal }) => {
+  const s = String(signal || '').toUpperCase()
+  const color =
+    s.includes('STRONG BUY') ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
+    s === 'BUY' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+    s.includes('STRONG SELL') ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
+    s === 'SELL' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+    'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+
+  return (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border ${color}`}>
+      {signal || 'NEUTRAL'}
+    </span>
+  )
+}
+
+const ScoreBar = ({ label, value, max = 3, color = 'purple' }) => {
+  const pct = Math.min(100, Math.max(0, ((Number(value) + max) / (max * 2)) * 100))
+  const colors = {
+    purple: 'bg-purple-500',
+    green: 'bg-green-500',
+    blue: 'bg-blue-500',
+    orange: 'bg-orange-500'
+  }
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-400">{label}</span>
+        <span className={`font-mono font-semibold ${Number(value) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          {fmtScore(value)}
+        </span>
+      </div>
+      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${colors[color] || colors.purple}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+const RsiGauge = ({ value }) => {
+  const v = Number(value) || 50
+  const pct = Math.min(100, Math.max(0, v))
+  const color = v < 30 ? 'bg-green-400' : v > 70 ? 'bg-red-400' : 'bg-yellow-400'
+  const label = v < 30 ? 'Oversold' : v > 70 ? 'Overbought' : 'Neutral'
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-400">RSI</span>
+        <span className={`font-mono font-semibold ${color.replace('bg-', 'text-')}`}>{fmt2(v)} — {label}</span>
+      </div>
+      <div className="h-2 bg-gray-700 rounded-full overflow-hidden relative">
+        {/* Oversold zone */}
+        <div className="absolute left-0 top-0 h-full w-[30%] bg-green-900/40 rounded-l-full" />
+        {/* Overbought zone */}
+        <div className="absolute right-0 top-0 h-full w-[30%] bg-red-900/40 rounded-r-full" />
+        <div
+          className={`h-full rounded-full transition-all ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────
+const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null }) => {
+  const [activeTab, setActiveTab] = useState('overview')
+  const [prediction, setPrediction] = useState(null)
+  const [priceData, setPriceData] = useState(null)
+  const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'syncing' | 'ready' | 'error'
+  const [syncMessage, setSyncMessage] = useState('')
+  const [dataSource, setDataSource] = useState('—')
+  const abortRef = useRef(false)
+
+  // WebSocket live price updates
   const handleWsUpdate = useCallback((update) => {
-    setRealTimeData(prev => ({
+    setPriceData(prev => ({
       ...(prev || {}),
       price: update.price ?? prev?.price,
       change: update.change ?? prev?.change,
       changePercent: update.changePercent ?? prev?.changePercent,
       volume: update.volume ?? prev?.volume,
       high: update.high ?? prev?.high,
-      low: update.low ?? prev?.low,
-      sources: update.source ? [update.source] : (prev?.sources || []),
-      isMock: false
+      low: update.low ?? prev?.low
     }))
-    setDataSource(`✅ Live (${update.source || 'WebSocket'})`)
   }, [])
 
   useEffect(() => {
-    // Subscribe to the selected stock via WebSocket
     usStocksWebSocket.subscribe(selectedStock, handleWsUpdate)
-    return () => {
-      usStocksWebSocket.unsubscribe(selectedStock, handleWsUpdate)
-    }
+    return () => usStocksWebSocket.unsubscribe(selectedStock, handleWsUpdate)
   }, [selectedStock, handleWsUpdate])
 
-  const timeframes = ['5M', '15M', '1H', '4H', '1D', '1W', '1M']
-
+  // Load price data from props or service
   useEffect(() => {
-    if (selectedStock) {
-      generateAdvancedAnalysis()
+    if (stockData) {
+      setPriceData(stockData)
+    } else {
+      USStocksDataService.fetchStockData(selectedStock)
+        .then(d => setPriceData(d))
+        .catch(() => {})
     }
-  }, [selectedStock, selectedTimeframe])
+  }, [selectedStock, stockData])
 
+  // Load full SeunBot prediction
   useEffect(() => {
-    loadRealTimeData()
+    if (!selectedStock) return
+    abortRef.current = false
+    setStatus('loading')
+    setPrediction(null)
+    setSyncMessage('')
+
+    const load = async () => {
+      try {
+        setStatus('syncing')
+        setSyncMessage('Requesting analysis from SeunBot backend...')
+        const result = await USStocksDataService.fetchUsPrediction(selectedStock, {
+          maxRetries: 5,
+          retryDelayMs: 5000
+        })
+
+        if (abortRef.current) return
+
+        if (result._isSyncing) {
+          setStatus('syncing')
+          setSyncMessage(result.message || 'Data is still syncing. Please retry in a moment.')
+          return
+        }
+
+        setPrediction(result)
+        setStatus('ready')
+        setDataSource(`✅ Live — ${result.analysisTimestamp ? new Date(result.analysisTimestamp).toLocaleTimeString() : 'just now'}`)
+      } catch (err) {
+        if (abortRef.current) return
+        setStatus('error')
+        setDataSource('❌ Unavailable')
+      }
+    }
+
+    load()
+    return () => { abortRef.current = true }
   }, [selectedStock])
 
-  const loadRealTimeData = async () => {
-    try {
-      console.log(`📈 Fetching real-time data for ${selectedStock}...`)
-      const data = stockData || await USStocksDataService.fetchStockData(selectedStock)
-      setRealTimeData(data)
-      setDataSource(data.isMock ? '⚠️ Simulated Data' : `✅ Live Data (${data.sources.join(', ')})`)
-      console.log('✅ Real-time data loaded:', data)
-    } catch (error) {
-      console.error('❌ Error loading real-time data:', error)
-      setDataSource('❌ Data Unavailable')
-    }
-  }
+  const handleRefresh = () => {
+    abortRef.current = false
+    setStatus('loading')
+    setPrediction(null)
+    setSyncMessage('')
 
-  const generateAdvancedAnalysis = async () => {
-    setLoading(true)
-    
-    try {
-      const data = realTimeData || stockData || await USStocksDataService.fetchStockData(selectedStock)
-      
-      // Calculate SEUN BOT signals with historical data simulation
-      const historicalData = generateHistoricalData(data, 50)
-      const seunBotSignals = USStocksDataService.calculateSeunBotSignals(data, historicalData)
-      
-      const comprehensiveAnalysis = {
-        smartMoney: generateSmartMoneyAnalysis(data, seunBotSignals),
-        patterns: generateGeometricPatterns(data),
-        elliottWave: generateElliottWave(data),
-        volume: generateVolumeAnalysis(data),
-        fundamental: generateFundamentalAnalysis(data),
-        cycle: generateCycleAnalysis(data),
-        gann: generateGannAnalysis(data),
-        planetary: generatePlanetaryAnalysis(data),
-        seunBot: seunBotSignals
-      }
-
-      setAnalysis(comprehensiveAnalysis)
-    } catch (error) {
-      console.error('Error generating analysis:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const generateHistoricalData = (currentData, periods) => {
-    const data = []
-    const basePrice = currentData.price
-    
-    for (let i = periods; i >= 0; i--) {
-      const randomChange = (Math.random() - 0.5) * 0.04
-      const price = basePrice * (1 + randomChange * (i / periods))
-      data.push({
-        close: price,
-        volume: currentData.volume * (0.8 + Math.random() * 0.4),
-        high: price * 1.02,
-        low: price * 0.98
-      })
-    }
-    
-    return data
-  }
-
-  const generateSmartMoneyAnalysis = (stockData, seunBotSignals) => {
-    const price = stockData.price
-    const change = stockData.changePercent
-    const volume = stockData.volume
-    
-    return {
-      seunBotSignal: seunBotSignals,
-      marketStructure: {
-        current: change > 3 ? 'Strong Bullish BOS' : change < -3 ? 'Strong Bearish BOS' : 'Consolidation',
-        alignment: { 
-          direction: change > 0 ? 'Bullish' : 'Bearish', 
-          alignment: Math.abs(change) * 12,
-          bias: 'Following US market sentiment'
-        },
-        timeframes: generateTimeframeStructure(stockData),
-        confluences: generateStructureConfluences(change, volume, stockData.sector)
-      },
-      liquidityAnalysis: {
-        zones: generateLiquidityZones(price, stockData.high, stockData.low),
-        fairValueGaps: generateFairValueGaps(stockData),
-        orderBlocks: generateOrderBlocks(stockData),
-        institutional_activity: {
-          smart_money_flow: volume > 30000000 ? 'High institutional activity' : 'Moderate activity',
-          dark_pool_activity: 'Significant off-exchange trading detected',
-          options_flow: 'Bullish options positioning'
+    USStocksDataService.fetchUsPrediction(selectedStock, { maxRetries: 5, retryDelayMs: 5000 })
+      .then(result => {
+        if (abortRef.current) return
+        if (result._isSyncing) {
+          setStatus('syncing')
+          setSyncMessage(result.message || 'Still syncing.')
+          return
         }
-      },
-      premiumDiscount: {
-        zone: (price - stockData.low) / (stockData.high - stockData.low) > 0.7 ? 'Premium' : 
-              (price - stockData.low) / (stockData.high - stockData.low) < 0.3 ? 'Discount' : 'Equilibrium',
-        currentPosition: (price - stockData.low) / (stockData.high - stockData.low),
-        market_context: {
-          market_phase: 'US market cycle consideration',
-          sector_rotation: getSectorRotationPhase(stockData.sector),
-          institutional_sentiment: 'Positive institutional positioning'
-        }
-      },
-      signals: generateSmartMoneySignals(stockData, seunBotSignals),
-      confidence: Math.min(95, 60 + Math.abs(change) * 5 + (volume / 5000000)),
-      dataSource: stockData.isMock ? 'Simulated Data' : 'Live Market Data'
-    }
-  }
-
-  const generateGeometricPatterns = (stockData) => {
-    const patterns = {
-      triangles: [],
-      channels: [],
-      flags: [],
-      pennants: [],
-      headAndShoulders: [],
-      doubleTopBottom: []
-    }
-
-    if (Math.abs(stockData.changePercent) < 2 && stockData.volume > 20000000) {
-      patterns.triangles.push({
-        type: 'Ascending Triangle',
-        pattern: 'Bullish Continuation',
-        resistance: stockData.price * 1.025,
-        support: stockData.price * 0.975,
-        breakoutTarget: stockData.price * 1.06,
-        probability: 75,
-        completion: '70%',
-        context: 'Strong institutional accumulation pattern',
-        timeframe: selectedTimeframe
+        setPrediction(result)
+        setStatus('ready')
+        setDataSource(`✅ Live — ${result.analysisTimestamp ? new Date(result.analysisTimestamp).toLocaleTimeString() : 'just now'}`)
       })
-    }
-
-    patterns.channels.push({
-      type: 'Ascending Channel',
-      pattern: 'Bullish Trend Continuation',
-      upperBound: stockData.price * 1.03,
-      lowerBound: stockData.price * 0.97,
-      target: stockData.price * 1.08,
-      probability: 80,
-      context: 'Following US market uptrend'
-    })
-
-    if (Math.abs(stockData.changePercent) > 3) {
-      patterns.flags.push({
-        type: stockData.changePercent > 0 ? 'Bull Flag' : 'Bear Flag',
-        pattern: 'Continuation Pattern',
-        flagPole: Math.abs(stockData.changePercent),
-        target: stockData.price * (stockData.changePercent > 0 ? 1.06 : 0.94),
-        probability: 82,
-        context: 'Strong institutional momentum'
+      .catch(() => {
+        if (!abortRef.current) setStatus('error')
       })
-    }
-
-    return patterns
   }
 
-  const generateElliottWave = (stockData) => {
-    const waveCount = determineWaveCount(stockData.changePercent, stockData.volume)
-    
-    return {
-      currentWave: waveCount,
-      waveType: stockData.changePercent > 0 ? 'Impulse Wave' : 'Corrective Wave',
-      degree: stockData.volume > 50000000 ? 'Primary' : stockData.volume > 30000000 ? 'Intermediate' : 'Minor',
-      fibonacci: calculateFibonacciLevels(stockData.price, stockData.changePercent),
-      projection: calculateWaveProjection(stockData.price, stockData.changePercent, waveCount),
-      nextTarget: calculateNextTarget(stockData.price, stockData.changePercent, waveCount),
-      invalidation: stockData.price * (waveCount.wave === 1 || waveCount.wave === 3 || waveCount.wave === 5 ? 0.94 : 1.06),
-      confidence: Math.min(95, 50 + (stockData.volume > 40000000 ? 25 : 15) + (Math.abs(stockData.changePercent) > 3 ? 20 : 10)),
-      subWaves: {
-        wave1: { target: stockData.price * 1.05, completed: true, description: 'Initial breakout' },
-        wave2: { target: stockData.price * 0.98, completed: true, description: 'Healthy retracement' },
-        wave3: { target: stockData.price * 1.15, completed: false, current: true, description: 'Main impulse wave' },
-        wave4: { target: stockData.price * 1.08, completed: false, description: 'Corrective pullback' },
-        wave5: { target: stockData.price * 1.25, completed: false, description: 'Final extension' }
-      }
-    }
-  }
-
-  const generateVolumeAnalysis = (stockData) => ({
-    volumeProfile: {
-      rating: stockData.volume > 40000000 ? 'High' : stockData.volume > 20000000 ? 'Medium' : 'Low',
-      relation: Math.abs(stockData.changePercent) > 2 && stockData.volume > 30000000 ? 'Healthy' : 'Divergent',
-      institutionalInterest: stockData.volume > 35000000,
-      market_participation: {
-        retail_flow: 'Strong retail buying interest',
-        institutional_flow: stockData.volume > 40000000 ? 'High institutional participation' : 'Moderate institutional flow',
-        foreign_flow: 'International investor interest'
-      }
-    },
-    volumeSpread: analyzeVolumeSpread(stockData),
-    wyckoffPhase: determineWyckoffPhase(stockData),
-    volumeSignals: generateVolumeSignals(stockData),
-    volumeBreakdown: {
-      institutional: stockData.volume * 0.65,
-      retail: stockData.volume * 0.25,
-      foreign: stockData.volume * 0.10,
-      analysis: 'Strong institutional participation driving volume'
-    }
-  })
-
-  const generateFundamentalAnalysis = (stockData) => ({
-    valuation: {
-      fair_value: stockData.price * (0.90 + Math.random() * 0.20),
-      target_price: stockData.price * (1.10 + Math.random() * 0.15),
-      recommendation: Math.random() > 0.5 ? 'BUY' : Math.random() > 0.3 ? 'HOLD' : 'SELL',
-      analyst_consensus: 'Strong Buy - 15 analysts',
-      price_target_range: `$${(stockData.price * 1.05).toFixed(2)} - $${(stockData.price * 1.25).toFixed(2)}`
-    },
-    financial_metrics: {
-      pe_ratio: 18.5 + Math.random() * 15,
-      pb_ratio: 2.5 + Math.random() * 3.5,
-      roe: 15 + Math.random() * 20,
-      dividend_yield: 1.5 + Math.random() * 3.5,
-      debt_equity: 0.3 + Math.random() * 0.7,
-      profit_margin: 15 + Math.random() * 25,
-      revenue_growth: 8 + Math.random() * 20
-    },
-    sector_dynamics: {
-      growth_prospects: getSectorGrowthProspects(stockData.sector),
-      competitive_position: 'Market leader with strong moat',
-      regulatory_environment: 'Favorable regulatory tailwinds',
-      technology_trends: 'Well-positioned for digital transformation'
-    }
-  })
-
-  const generateCycleAnalysis = (stockData) => ({
-    market_cycles: {
-      us_economic_cycle: 'Mid-cycle expansion phase',
-      federal_reserve_policy: 'Accommodative monetary policy',
-      earnings_cycle: 'Strong earnings growth phase',
-      sector_rotation: 'Growth sectors outperforming'
-    },
-    seasonal_patterns: {
-      quarterly_earnings: 'Q4 earnings season approaching',
-      dividend_season: 'Ex-dividend date upcoming',
-      tax_considerations: 'Year-end tax loss harvesting',
-      holiday_seasonality: 'Positive holiday retail trends'
-    },
-    cycle_position: {
-      current_phase: 'Bull market continuation',
-      phase_duration: '18 months',
-      next_phase: 'Late cycle peak',
-      probability: 70
-    }
-  })
-
-  const generateGannAnalysis = (stockData) => {
-    const price = stockData.price
-    const sqrt = Math.sqrt(price)
-    
-    return {
-      squareOfNine: {
-        currentSquare: Math.floor(sqrt) ** 2,
-        nextSquare: Math.ceil(sqrt) ** 2,
-        context: 'Gann squares for US equity pricing'
-      },
-      gannAngles: generateGannAngles(price),
-      gannLevels: {
-        support: [price * 0.875, price * 0.75, price * 0.625],
-        resistance: [price * 1.125, price * 1.25, price * 1.375],
-        timeTargets: ['2 weeks', '1 month', '3 months']
-      }
-    }
-  }
-
-  const generatePlanetaryAnalysis = (stockData) => {
-    const currentDate = new Date()
-    
-    return {
-      lunar_phases: {
-        current_phase: calculateLunarPhase(currentDate),
-        market_influence: 'Lunar cycle correlation with market sentiment'
-      },
-      planetary_positions: generatePlanetaryPositions(currentDate),
-      astrological_forecast: {
-        short_term: 'Favorable planetary alignments for next 2 weeks',
-        medium_term: 'Jupiter transit supporting growth for 3 months',
-        long_term: 'Saturn influence requiring patience for 6 months'
-      }
-    }
-  }
-
-  // Helper functions
-  const generateTimeframeStructure = (stockData) => {
-    const structures = {}
-    timeframes.forEach(tf => {
-      const multiplier = tf === '5M' ? 0.4 : tf === '15M' ? 0.6 : tf === '1H' ? 1 : tf === '4H' ? 1.3 : tf === '1D' ? 2 : tf === '1W' ? 3 : 4
-      const adjustedChange = stockData.changePercent * multiplier
-      
-      structures[tf] = {
-        trend: adjustedChange > 1.5 ? 'Bullish' : adjustedChange < -1.5 ? 'Bearish' : 'Neutral',
-        strength: Math.abs(adjustedChange) * 10,
-        structure: adjustedChange > 4 ? 'BOS' : Math.abs(adjustedChange) > 2 ? 'CHoCH' : 'Range'
-      }
-    })
-    return structures
-  }
-
-  const generateStructureConfluences = (change, volume, sector) => {
-    const confluences = []
-    if (Math.abs(change) > 3 && volume > 30000000) {
-      confluences.push({
-        type: 'BOS Confluence',
-        timeframes: ['1H', '4H', '1D'],
-        strength: 'High',
-        description: 'Break of Structure confirmed across multiple timeframes',
-        sector_context: `${sector} sector showing strong momentum`
-      })
-    }
-    return confluences
-  }
-
-  const generateLiquidityZones = (price, high, low) => ({
-    sellLiquidity: {
-      level1: high * 1.008,
-      level2: high * 1.015,
-      level3: high * 1.025,
-      strength: 'High'
-    },
-    buyLiquidity: {
-      level1: low * 0.992,
-      level2: low * 0.985,
-      level3: low * 0.975,
-      strength: 'High'
-    }
-  })
-
-  const generateFairValueGaps = (stockData) => {
-    const gaps = []
-    if (Math.abs(stockData.changePercent) > 3) {
-      gaps.push({
-        type: stockData.changePercent > 0 ? 'Bullish FVG' : 'Bearish FVG',
-        high: stockData.price * 1.02,
-        low: stockData.price * 0.98,
-        significance: 'High'
-      })
-    }
-    return gaps
-  }
-
-  const generateOrderBlocks = (stockData) => {
-    const blocks = []
-    if (stockData.volume > 30000000 && Math.abs(stockData.changePercent) > 2) {
-      blocks.push({
-        type: stockData.changePercent > 0 ? 'Bullish Order Block' : 'Bearish Order Block',
-        strength: 'Strong',
-        context: 'Institutional order flow detected'
-      })
-    }
-    return blocks
-  }
-
-  const generateSmartMoneySignals = (stockData, seunBotSignals) => {
-    const signals = []
-    
-    if (seunBotSignals.signal.includes('BUY')) {
-      signals.push({
-        type: 'SEUN BOT Buy Signal',
-        direction: 'Bullish',
-        strength: seunBotSignals.strength >= 4 ? 'Very Strong' : 'Strong',
-        context: seunBotSignals.factors.join(', '),
-        stopLoss: seunBotSignals.stopLoss,
-        target1: seunBotSignals.target1,
-        target2: seunBotSignals.target2
-      })
-    } else if (seunBotSignals.signal.includes('SELL')) {
-      signals.push({
-        type: 'SEUN BOT Sell Signal',
-        direction: 'Bearish',
-        strength: seunBotSignals.strength >= 4 ? 'Very Strong' : 'Strong',
-        context: seunBotSignals.factors.join(', ')
-      })
-    }
-    
-    if (stockData.changePercent > 3 && stockData.volume > 40000000) {
-      signals.push({
-        type: 'Smart Money Breakout',
-        direction: 'Bullish',
-        strength: 'Strong',
-        context: 'Institutional accumulation detected'
-      })
-    }
-    
-    return signals
-  }
-
-  const getSectorRotationPhase = (sector) => {
-    const phases = {
-      'Technology': 'Growth sector leadership',
-      'Financial Services': 'Interest rate cycle beneficiary',
-      'Healthcare': 'Defensive rotation phase',
-      'Consumer Discretionary': 'Economic expansion beneficiary',
-      'Energy': 'Commodity cycle positioning',
-      'Industrials': 'Infrastructure spending beneficiary',
-      'Consumer Staples': 'Defensive positioning',
-      'Communication Services': 'Digital transformation leader',
-      'Real Estate': 'Rate-sensitive positioning',
-      'Materials': 'Commodity super-cycle',
-      'Utilities': 'Defensive income positioning'
-    }
-    return phases[sector] || 'Neutral rotation'
-  }
-
-  const determineWaveCount = (change, volume) => {
-    if (change > 5 && volume > 40000000) {
-      return { wave: 3, description: 'Wave 3 - Main Impulse' }
-    } else if (change > 2 && change <= 5) {
-      return { wave: 1, description: 'Wave 1 - Initial Breakout' }
-    } else {
-      return { wave: 'A', description: 'Wave A - Correction' }
-    }
-  }
-
-  const calculateFibonacciLevels = (price, change) => {
-    const range = Math.abs(price * change / 100)
-    return {
-      retracement: {
-        '23.6%': price - (range * 0.236),
-        '38.2%': price - (range * 0.382),
-        '50%': price - (range * 0.5),
-        '61.8%': price - (range * 0.618)
-      },
-      extension: {
-        '127.2%': price + (range * 1.272),
-        '161.8%': price + (range * 1.618)
-      }
-    }
-  }
-
-  const calculateWaveProjection = (price, change, waveCount) => ({
-    target: price * 1.15,
-    type: 'Wave Projection',
-    probability: 80
-  })
-
-  const calculateNextTarget = (price, change, waveCount) => price * 1.12
-
-  const analyzeVolumeSpread = (stockData) => ({
-    type: 'Professional Money',
-    signal: stockData.changePercent > 0 ? 'Institutional Buying' : 'Institutional Selling',
-    strength: 'Strong'
-  })
-
-  const determineWyckoffPhase = (stockData) => ({
-    phase: 'Accumulation',
-    stage: 'Phase B - Testing Supply',
-    description: 'Smart money accumulating positions'
-  })
-
-  const generateVolumeSignals = (stockData) => [{
-    signal: 'Professional Activity',
-    strength: 'Strong',
-    description: 'High volume indicates institutional involvement'
-  }]
-
-  const generateGannAngles = (price) => ({
-    angles: {
-      '1x1': { angle: 45, price: price, description: 'Main trend line' },
-      '1x2': { angle: 26.25, price: price * 1.02, description: 'Slow uptrend' }
-    }
-  })
-
-  const getSectorGrowthProspects = (sector) => `${sector} showing strong growth trajectory`
-
-  const generatePlanetaryPositions = (date) => ({
-    sun: { longitude: 280.460, sign: 'Sagittarius', influence: 'Major' },
-    moon: { longitude: 218.316, sign: 'Cancer', influence: 'Major' }
-  })
-
-  const calculateLunarPhase = (date) => ({
-    name: 'Waxing Crescent',
-    influence: 'Growth',
-    market_context: 'Favorable for market growth'
-  })
-
-  if (loading) {
+  // ── Price bar shown in all states ──────────────────
+  const PriceBar = () => {
+    const d = priceData || stockData
+    if (!d) return null
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <Brain className="h-5 w-5 text-purple-500 animate-pulse" />
-          <h3 className="text-lg font-semibold text-white">SeunBot Advanced Analysis</h3>
-          <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400">
-            {dataSource}
+      <div className="mb-4 p-3 bg-gray-700/40 border border-gray-600/40 rounded-lg flex flex-wrap gap-6 items-center">
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">Current Price</div>
+          <div className="text-2xl font-bold text-white">{fmtPrice(d.price)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">24h Change</div>
+          <div className={`text-lg font-semibold flex items-center gap-1 ${d.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {d.changePercent >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+            {d.changePercent >= 0 ? '+' : ''}{fmtPct(d.changePercent)}
           </div>
         </div>
-        <div className="flex items-center justify-center h-64">
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">Volume</div>
+          <div className="text-lg font-semibold text-white">{d.volume ? `${(d.volume / 1e6).toFixed(2)}M` : '—'}</div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-400 mb-0.5">High / Low</div>
+          <div className="text-sm text-white">{fmtPrice(d.high)} / {fmtPrice(d.low)}</div>
+        </div>
+        <div className="ml-auto text-xs text-gray-500">{dataSource}</div>
+      </div>
+    )
+  }
+
+  // ── Loading / Syncing ──────────────────────────────
+  if (status === 'loading' || (status === 'syncing' && !prediction)) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6">
+        <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} />
+        <PriceBar />
+        <div className="flex flex-col items-center justify-center h-48 gap-4">
+          <Loader className="w-10 h-10 text-purple-400 animate-spin" />
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Analyzing with SeunBot intelligence...</p>
-            <p className="text-sm text-gray-500">Processing RSI, MACD, Volume & Smart Money Concepts</p>
+            <p className="text-white font-medium">
+              {status === 'loading' ? 'Connecting to SeunBot backend...' : 'Syncing historical data...'}
+            </p>
+            {syncMessage && (
+              <p className="text-sm text-gray-400 mt-1 max-w-sm text-center">{syncMessage}</p>
+            )}
+            <p className="text-xs text-gray-500 mt-2">This may take up to 30 seconds for a fresh symbol</p>
           </div>
         </div>
       </div>
     )
   }
 
-  if (!analysis) {
+  // ── Error / Still syncing after retries ───────────
+  if (status === 'error' || (status === 'syncing' && !prediction)) {
     return (
       <div className="bg-gray-800 rounded-lg p-6">
-        <div className="text-center py-8 text-gray-400">
-          <Brain className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>Select a stock to begin SeunBot advanced analysis</p>
+        <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} />
+        <PriceBar />
+        <div className="flex flex-col items-center justify-center h-48 gap-4">
+          <AlertTriangle className="w-12 h-12 text-yellow-400 opacity-70" />
+          <div className="text-center">
+            <p className="text-white font-medium">
+              {status === 'syncing' ? 'Data still syncing — please try again shortly' : 'Analysis temporarily unavailable'}
+            </p>
+            {syncMessage && <p className="text-sm text-gray-400 mt-1 max-w-sm">{syncMessage}</p>}
+            <button
+              onClick={handleRefresh}
+              className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white text-sm transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     )
   }
+
+  // ── Full analysis ─────────────────────────────────
+  const ind = prediction?.indicators || {}
+  const scores = prediction?.scores || {}
+  const tradePlan = prediction?.tradePlan
+  const weeklySetup = prediction?.weeklyTradeSetup
+  const geometricPattern = prediction?.geometricPattern
+  const elliottWave = prediction?.elliottWavesPattern
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'indicators', label: 'Indicators', icon: Activity },
+    { id: 'tradePlan', label: 'Trade Plan', icon: Target },
+    { id: 'patterns', label: 'Patterns', icon: Triangle },
+    { id: 'narrative', label: 'Narrative', icon: FileText }
+  ]
 
   return (
     <div className="bg-gray-800 rounded-lg p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-2">
-          <Brain className="h-5 w-5 text-purple-500" />
-          <h3 className="text-lg font-semibold text-white">SeunBot Advanced Analysis</h3>
-          <div className="px-2 py-1 bg-purple-500/20 rounded text-xs text-purple-400">
-            {selectedStock}
+      <Header selectedStock={selectedStock} dataSource={dataSource} onRefresh={handleRefresh} />
+
+      {/* Price Bar */}
+      <PriceBar />
+
+      {/* ── SEUN BOT Master Signal ── */}
+      <div className="mb-6 p-5 rounded-xl bg-gradient-to-r from-purple-900/40 via-blue-900/30 to-gray-800 border border-purple-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-yellow-400" />
+            <span className="text-white font-bold text-lg">SeunBot Signal</span>
+            <span className="text-xs text-gray-400 bg-gray-700/60 px-2 py-0.5 rounded">{selectedStock}</span>
           </div>
-          <div className="px-2 py-1 bg-blue-500/20 rounded text-xs text-blue-400">
-            {dataSource}
+          <SignalBadge signal={prediction?.overallMtfSignal || prediction?.direction} />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">Direction</div>
+            <div className={`text-lg font-bold ${directionColor(prediction?.direction)}`}>
+              {prediction?.direction || '—'}
+            </div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">Final Score</div>
+            <div className={`text-lg font-bold ${Number(prediction?.finalScore) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {fmtScore(prediction?.finalScore)}
+            </div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">Signal Strength</div>
+            <div className="text-lg font-bold text-white">
+              {fmt2(prediction?.signalStrength)} / 3
+            </div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">Strong Signal</div>
+            <div className={`text-lg font-bold ${prediction?.isStrongSignal ? 'text-emerald-400' : 'text-gray-400'}`}>
+              {prediction?.isStrongSignal ? '✓ Yes' : '✗ No'}
+            </div>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <select
-            value={selectedTimeframe}
-            onChange={(e) => setSelectedTimeframe(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white text-sm"
-          >
-            {timeframes.map(tf => (
-              <option key={tf} value={tf}>{tf}</option>
+
+        {/* Score breakdown bars */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <ScoreBar label="Technical" value={scores.technical} color="purple" />
+          <ScoreBar label="Gann" value={scores.gann} color="blue" />
+          <ScoreBar label="Sentiment" value={scores.sentiment} color="orange" />
+          <ScoreBar label="Fundamental" value={scores.fundamental} color="green" />
+        </div>
+
+        {scores.weights && (
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+            {Object.entries(scores.weights).map(([k, v]) => (
+              <span key={k} className="bg-gray-700/40 px-2 py-0.5 rounded">{k}: {v}</span>
             ))}
-          </select>
-          <button
-            onClick={() => {
-              loadRealTimeData()
-              generateAdvancedAnalysis()
-            }}
-            className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-400"
-            title="Refresh data"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Real-time data indicator */}
-      {realTimeData && (
-        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded">
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="text-blue-400 font-medium">Live Price: </span>
-              <span className="text-white font-bold text-lg">${realTimeData.price.toFixed(2)}</span>
-            </div>
-            <div>
-              <span className={`font-bold ${realTimeData.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {realTimeData.changePercent >= 0 ? '+' : ''}{realTimeData.changePercent.toFixed(2)}%
-              </span>
-            </div>
-            <div className="text-xs text-gray-400">
-              Volume: {(realTimeData.volume / 1000000).toFixed(2)}M
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SEUN BOT Signal Panel */}
-      {analysis?.seunBot && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-lg">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <Zap className="h-5 w-5 text-yellow-400" />
-              <span className="text-white font-bold text-lg">SEUN BOT SIGNAL</span>
-            </div>
-            <div className={`text-2xl font-bold ${
-              analysis.seunBot.signal.includes('STRONG BUY') ? 'text-green-400' :
-              analysis.seunBot.signal.includes('BUY') ? 'text-green-300' :
-              analysis.seunBot.signal.includes('STRONG SELL') ? 'text-red-400' :
-              analysis.seunBot.signal.includes('SELL') ? 'text-red-300' :
-              'text-yellow-400'
-            }`}>
-              {analysis.seunBot.signal}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-            <div className="text-center p-2 bg-gray-700/30 rounded">
-              <div className="text-xs text-gray-400">Signal Strength</div>
-              <div className="text-white font-bold">{analysis.seunBot.strength.toFixed(1)}/5</div>
-            </div>
-            <div className="text-center p-2 bg-gray-700/30 rounded">
-              <div className="text-xs text-gray-400">RSI</div>
-              <div className={`font-bold ${
-                analysis.seunBot.rsi < 30 ? 'text-green-400' :
-                analysis.seunBot.rsi > 70 ? 'text-red-400' :
-                'text-yellow-400'
-              }`}>{analysis.seunBot.rsi?.toFixed(1) || 'N/A'}</div>
-            </div>
-            <div className="text-center p-2 bg-gray-700/30 rounded">
-              <div className="text-xs text-gray-400">MACD</div>
-              <div className={`font-bold ${
-                analysis.seunBot.macd > 0 ? 'text-green-400' : 'text-red-400'
-              }`}>{analysis.seunBot.macd?.toFixed(2) || 'N/A'}</div>
-            </div>
-            <div className="text-center p-2 bg-gray-700/30 rounded">
-              <div className="text-xs text-gray-400">Confidence</div>
-              <div className="text-white font-bold">{analysis.smartMoney.confidence.toFixed(0)}%</div>
-            </div>
-          </div>
-
-          {analysis.seunBot.stopLoss && (
-            <div className="grid grid-cols-3 gap-3 text-sm">
-              <div className="p-2 bg-red-500/10 rounded">
-                <div className="text-xs text-gray-400">Stop Loss</div>
-                <div className="text-red-400 font-bold">${analysis.seunBot.stopLoss.toFixed(2)}</div>
-              </div>
-              <div className="p-2 bg-green-500/10 rounded">
-                <div className="text-xs text-gray-400">Target 1 (RR 3:1)</div>
-                <div className="text-green-400 font-bold">${analysis.seunBot.target1.toFixed(2)}</div>
-              </div>
-              <div className="p-2 bg-green-500/10 rounded">
-                <div className="text-xs text-gray-400">Target 2 (RR 6:1)</div>
-                <div className="text-green-400 font-bold">${analysis.seunBot.target2.toFixed(2)}</div>
-              </div>
-            </div>
-          )}
-
-          {analysis.seunBot.factors && analysis.seunBot.factors.length > 0 && (
-            <div className="mt-3 p-2 bg-gray-700/20 rounded">
-              <div className="text-xs text-gray-400 mb-1">Signal Factors:</div>
-              <div className="flex flex-wrap gap-1">
-                {analysis.seunBot.factors.map((factor, index) => (
-                  <span key={index} className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded">
-                    {factor}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex flex-wrap space-x-1 mb-6 bg-gray-700/50 rounded-lg p-1">
-        {[
-          { id: 'smartMoney', label: 'Smart Money', icon: BarChart3 },
-          { id: 'patterns', label: 'Patterns', icon: Triangle },
-          { id: 'elliottWave', label: 'Elliott Wave', icon: Waves },
-          { id: 'volume', label: 'Volume', icon: Volume2 },
-          { id: 'fundamental', label: 'Fundamental', icon: TrendingUp },
-          { id: 'cycle', label: 'Cycle', icon: Clock },
-          { id: 'gann', label: 'Gann', icon: Compass },
-          { id: 'planetary', label: 'Planetary', icon: Globe }
-        ].map(tab => (
+      {/* ── Tabs ── */}
+      <div className="flex flex-wrap gap-1 mb-5 bg-gray-700/40 rounded-lg p-1">
+        {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-purple-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-600'
             }`}
           >
-            <tab.icon className="h-4 w-4" />
-            <span>{tab.label}</span>
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="space-y-4">
-        {activeTab === 'smartMoney' && analysis?.smartMoney && (
-          <div className="space-y-4">
-            <div className="bg-gray-700/30 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-3">Smart Money Concepts</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
-                  <div className="text-blue-400 font-medium text-sm mb-2">Market Structure</div>
-                  <div className="text-white font-bold">{analysis.smartMoney.marketStructure.current}</div>
-                </div>
-                <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded">
-                  <div className="text-purple-400 font-medium text-sm mb-2">Premium/Discount Zone</div>
-                  <div className="text-white font-bold">{analysis.smartMoney.premiumDiscount.zone}</div>
-                </div>
-              </div>
+      {/* ── Tab Content ── */}
+      <div>
+        {activeTab === 'overview' && (
+          <OverviewTab
+            weeklySetup={weeklySetup}
+            geometricPattern={geometricPattern}
+            elliottWave={elliottWave}
+            prediction={prediction}
+          />
+        )}
+        {activeTab === 'indicators' && <IndicatorsTab ind={ind} />}
+        {activeTab === 'tradePlan' && <TradePlanTab tradePlan={tradePlan} prediction={prediction} />}
+        {activeTab === 'patterns' && (
+          <PatternsTab
+            geometricPattern={geometricPattern}
+            elliottWave={elliottWave}
+            weeklySetup={weeklySetup}
+          />
+        )}
+        {activeTab === 'narrative' && <NarrativeTab narrative={prediction?.tradeNarrative} />}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────────
+
+const Header = ({ selectedStock, dataSource, onRefresh }) => (
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center gap-2">
+      <Brain className="w-5 h-5 text-purple-400" />
+      <h3 className="text-lg font-semibold text-white">SeunBot Advanced Analysis</h3>
+      <span className="px-2 py-0.5 bg-purple-500/20 rounded text-xs text-purple-400">{selectedStock}</span>
+    </div>
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500">{dataSource}</span>
+      <button
+        onClick={onRefresh}
+        className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-400 transition-colors"
+        title="Refresh analysis"
+      >
+        <RefreshCw className="w-4 h-4" />
+      </button>
+    </div>
+  </div>
+)
+
+const OverviewTab = ({ weeklySetup, geometricPattern, elliottWave, prediction }) => (
+  <div className="space-y-4">
+    {/* Weekly Trade Setup */}
+    {weeklySetup && (
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-blue-400" />
+          Weekly Trade Setup
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="bg-gray-800/60 rounded-lg p-3">
+            <div className="text-xs text-gray-400 mb-1">Setup Name</div>
+            <div className={`text-base font-bold ${weeklySetup.setupName === 'Bull' ? 'text-green-400' : weeklySetup.setupName === 'Bear' ? 'text-red-400' : 'text-yellow-400'}`}>
+              {weeklySetup.setupName || '—'}
             </div>
           </div>
-        )}
+          <div className="bg-gray-800/60 rounded-lg p-3 md:col-span-2">
+            <div className="text-xs text-gray-400 mb-1">Description</div>
+            <div className="text-sm text-white">{weeklySetup.description || '—'}</div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3">
+            <div className="text-xs text-gray-400 mb-1">Setup Confidence</div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 bg-gray-700 rounded-full">
+                <div
+                  className="h-full bg-blue-500 rounded-full"
+                  style={{ width: `${Math.round((weeklySetup.setupConfidence || 0) * 100)}%` }}
+                />
+              </div>
+              <span className="text-sm font-semibold text-blue-400">
+                {Math.round((weeklySetup.setupConfidence || 0) * 100)}%
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
+    )}
+
+    {/* Geometric Pattern */}
+    {geometricPattern && (
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+          <Triangle className="w-4 h-4 text-orange-400" />
+          Chart Pattern
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="bg-gray-800/60 rounded-lg p-3">
+            <div className="text-xs text-gray-400 mb-1">Pattern</div>
+            <div className="text-base font-bold text-orange-400">{geometricPattern.name || '—'}</div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3">
+            <div className="text-xs text-gray-400 mb-1">Confidence</div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 bg-gray-700 rounded-full">
+                <div
+                  className="h-full bg-orange-500 rounded-full"
+                  style={{ width: `${Math.round((geometricPattern.confidence || 0) * 100)}%` }}
+                />
+              </div>
+              <span className="text-sm font-semibold text-orange-400">
+                {Math.round((geometricPattern.confidence || 0) * 100)}%
+              </span>
+            </div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3 md:col-span-3">
+            <div className="text-xs text-gray-400 mb-1">Description</div>
+            <div className="text-sm text-gray-300">{geometricPattern.description || '—'}</div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Elliott Wave */}
+    {elliottWave && elliottWave !== 'No clear Elliott Wave pattern' && (
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+          <Waves className="w-4 h-4 text-purple-400" />
+          Elliott Wave Pattern
+        </h4>
+        <div className="text-sm text-gray-300">{elliottWave}</div>
+      </div>
+    )}
+
+    {/* Analysis Timestamp */}
+    {prediction?.analysisTimestamp && (
+      <div className="flex items-center gap-2 text-xs text-gray-500 pt-2">
+        <Clock className="w-3 h-3" />
+        Analysis generated: {new Date(prediction.analysisTimestamp).toLocaleString()}
+      </div>
+    )}
+  </div>
+)
+
+const IndicatorsTab = ({ ind }) => {
+  const macd = ind?.macd || {}
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* RSI */}
+        <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+          <h4 className="text-white font-medium mb-3">RSI (14)</h4>
+          <RsiGauge value={ind?.rsi} />
+          <div className="mt-3 text-2xl font-bold text-center">
+            <span className={ind?.rsi < 30 ? 'text-green-400' : ind?.rsi > 70 ? 'text-red-400' : 'text-yellow-400'}>
+              {fmt2(ind?.rsi)}
+            </span>
+          </div>
+        </div>
+
+        {/* ADX */}
+        <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+          <h4 className="text-white font-medium mb-3">ADX (Trend Strength)</h4>
+          <div className="text-xs text-gray-400 mb-2 flex justify-between">
+            <span>Ranging (&lt;20)</span>
+            <span>Trending (&gt;25)</span>
+          </div>
+          <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${ind?.adx > 25 ? 'bg-purple-500' : 'bg-gray-500'}`}
+              style={{ width: `${Math.min(100, Number(ind?.adx) || 0)}%` }}
+            />
+          </div>
+          <div className="mt-3 text-2xl font-bold text-center">
+            <span className={ind?.adx > 25 ? 'text-purple-400' : 'text-gray-400'}>
+              {fmt2(ind?.adx)}
+            </span>
+          </div>
+          <div className="text-xs text-center text-gray-500 mt-1">
+            {ind?.adx > 40 ? 'Very Strong Trend' : ind?.adx > 25 ? 'Trending' : ind?.adx > 20 ? 'Weak Trend' : 'Ranging / Choppy'}
+          </div>
+        </div>
+      </div>
+
+      {/* ATR */}
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3">ATR (Average True Range)</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-xs text-gray-400">ATR Value (Volatility)</div>
+            <div className="text-2xl font-bold text-blue-400">{fmt2(ind?.atr)}</div>
+            <div className="text-xs text-gray-500 mt-1">Daily average price range</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400">Volatility Level</div>
+            <div className={`text-lg font-semibold ${ind?.atr > 50 ? 'text-red-400' : ind?.atr > 20 ? 'text-yellow-400' : 'text-green-400'}`}>
+              {ind?.atr > 50 ? '🔴 High' : ind?.atr > 20 ? '🟡 Medium' : '🟢 Low'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MACD */}
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+          <Activity className="w-4 h-4 text-blue-400" />
+          MACD
+          {macd.status && (
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              macd.status === 'Bullish' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+            }`}>
+              {macd.status}
+            </span>
+          )}
+        </h4>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">MACD Line</div>
+            <div className={`text-lg font-bold ${Number(macd.macdLine) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {fmt2(macd.macdLine)}
+            </div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">Signal Line</div>
+            <div className="text-lg font-bold text-blue-400">{fmt2(macd.signalLine)}</div>
+          </div>
+          <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+            <div className="text-xs text-gray-400 mb-1">Histogram</div>
+            <div className={`text-lg font-bold ${Number(macd.histogram) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {fmt2(macd.histogram)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const TradePlanTab = ({ tradePlan, prediction }) => {
+  if (!tradePlan) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 gap-3">
+        <Shield className="w-12 h-12 text-gray-600" />
+        <p className="text-gray-400 text-center">
+          No trade plan generated — signal strength is below threshold for a recommended trade.
+        </p>
+        <p className="text-xs text-gray-500">SeunBot requires a minimum score to publish a trade plan.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Is Recommended */}
+      <div className={`flex items-center gap-3 p-4 rounded-lg border ${
+        tradePlan.isRecommended
+          ? 'bg-green-500/10 border-green-500/30'
+          : 'bg-yellow-500/10 border-yellow-500/30'
+      }`}>
+        {tradePlan.isRecommended
+          ? <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+          : <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+        }
+        <div>
+          <div className={`font-semibold ${tradePlan.isRecommended ? 'text-green-400' : 'text-yellow-400'}`}>
+            {tradePlan.isRecommended ? 'Trade Recommended by SeunBot' : 'Trade Not Recommended — Monitor Only'}
+          </div>
+          <div className="text-sm text-gray-300 mt-0.5">
+            Direction: <strong>{tradePlan.direction || prediction?.direction || '—'}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Entry / Stop / Targets */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+          <div className="text-xs text-gray-400 mb-1">Entry Price</div>
+          <div className="text-xl font-bold text-blue-400">{fmtPrice(tradePlan.entryPrice)}</div>
+        </div>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+          <div className="text-xs text-gray-400 mb-1">Stop Loss</div>
+          <div className="text-xl font-bold text-red-400">{fmtPrice(tradePlan.stopLoss)}</div>
+          {tradePlan.entryPrice && tradePlan.stopLoss && (
+            <div className="text-xs text-gray-500 mt-1">
+              Risk: {fmtPct(Math.abs((tradePlan.stopLoss - tradePlan.entryPrice) / tradePlan.entryPrice * 100))}
+            </div>
+          )}
+        </div>
+        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+          <div className="text-xs text-gray-400 mb-1">Take Profit 1</div>
+          <div className="text-xl font-bold text-green-400">{fmtPrice(tradePlan.takeProfit1)}</div>
+          {tradePlan.riskRewardRatio1 && (
+            <div className="text-xs text-gray-400 mt-1">RR: {fmt2(tradePlan.riskRewardRatio1)}</div>
+          )}
+        </div>
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
+          <div className="text-xs text-gray-400 mb-1">Take Profit 2</div>
+          <div className="text-xl font-bold text-emerald-400">{fmtPrice(tradePlan.takeProfit2)}</div>
+          {tradePlan.riskRewardRatio2 && (
+            <div className="text-xs text-gray-400 mt-1">RR: {fmt2(tradePlan.riskRewardRatio2)}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Reason */}
+      {tradePlan.reason && (
+        <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+          <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple-400" />
+            SeunBot Reasoning
+          </h4>
+          <p className="text-sm text-gray-300 leading-relaxed">{tradePlan.reason}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const PatternsTab = ({ geometricPattern, elliottWave, weeklySetup }) => (
+  <div className="space-y-4">
+    {geometricPattern && (
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+          <Triangle className="w-4 h-4 text-orange-400" />
+          Geometric Pattern — {geometricPattern.name}
+        </h4>
+        <div className="flex items-center gap-4 mb-2">
+          <div className="text-sm text-gray-400">Confidence</div>
+          <div className="flex-1 h-2 bg-gray-700 rounded-full">
+            <div
+              className="h-full bg-orange-500 rounded-full"
+              style={{ width: `${Math.round((geometricPattern.confidence || 0) * 100)}%` }}
+            />
+          </div>
+          <div className="text-sm font-semibold text-orange-400">
+            {Math.round((geometricPattern.confidence || 0) * 100)}%
+          </div>
+        </div>
+        <p className="text-sm text-gray-300">{geometricPattern.description}</p>
+      </div>
+    )}
+
+    {elliottWave && (
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+          <Waves className="w-4 h-4 text-purple-400" />
+          Elliott Wave Pattern
+        </h4>
+        <p className="text-sm text-gray-300">{elliottWave}</p>
+      </div>
+    )}
+
+    {weeklySetup && (
+      <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+        <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-blue-400" />
+          Weekly Setup
+        </h4>
+        <div className="space-y-2">
+          <div>
+            <span className="text-xs text-gray-400">Type: </span>
+            <span className={`font-semibold ${weeklySetup.setupName === 'Bull' ? 'text-green-400' : weeklySetup.setupName === 'Bear' ? 'text-red-400' : 'text-yellow-400'}`}>
+              {weeklySetup.setupName}
+            </span>
+          </div>
+          <p className="text-sm text-gray-300">{weeklySetup.description}</p>
+          <div className="flex items-center gap-3 mt-2">
+            <span className="text-xs text-gray-400">Confidence:</span>
+            <div className="flex-1 h-1.5 bg-gray-700 rounded-full">
+              <div
+                className="h-full bg-blue-500 rounded-full"
+                style={{ width: `${Math.round((weeklySetup.setupConfidence || 0) * 100)}%` }}
+              />
+            </div>
+            <span className="text-xs font-semibold text-blue-400">
+              {Math.round((weeklySetup.setupConfidence || 0) * 100)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {!geometricPattern && !elliottWave && !weeklySetup && (
+      <div className="flex flex-col items-center justify-center h-40 gap-3">
+        <Hexagon className="w-12 h-12 text-gray-600" />
+        <p className="text-gray-400">No pattern data available for this symbol yet.</p>
+      </div>
+    )}
+  </div>
+)
+
+const NarrativeTab = ({ narrative }) => {
+  if (!narrative) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 gap-3">
+        <FileText className="w-12 h-12 text-gray-600" />
+        <p className="text-gray-400">No trade narrative available.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+      <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+        <FileText className="w-4 h-4 text-purple-400" />
+        SeunBot Trade Narrative
+      </h4>
+      <pre className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">
+        {narrative}
+      </pre>
     </div>
   )
 }

@@ -40,63 +40,96 @@ const USStocksWeeklySetupsPanel = () => {
     }
   }
 
+  /**
+   * Build weekly setups from real API predictions.
+   * We scan up to 30 "ready" stocks concurrently (capped to avoid hammering the API).
+   * For each, we call /api/UsPrediction/{symbol} with maxRetries=0 so we skip syncing ones fast.
+   */
   const generateWeeklySetups = async (stocks) => {
     const highProbabilitySetups = []
-    
-    for (const stock of stocks) {
-      // Generate historical data for analysis
-      const historicalData = generateHistoricalData(stock, 50)
-      const seunBotSignals = USStocksDataService.calculateSeunBotSignals(stock, historicalData)
-      
-      // Only include high probability setups
-      if (seunBotSignals.strength >= 3) {
-        const setupType = determineSetupType(stock, seunBotSignals)
-        const probability = Math.min(95, 65 + seunBotSignals.strength * 8)
-        const confidence = seunBotSignals.strength >= 4 ? 'High' : seunBotSignals.strength >= 3 ? 'Medium' : 'Low'
-        
-        highProbabilitySetups.push({
-          symbol: stock.symbol,
-          sector: stock.sector,
-          setupType: setupType,
-          probability: probability,
-          confidence: confidence,
-          currentPrice: stock.price,
-          targetPrice: seunBotSignals.target1 || stock.price * 1.15,
-          stopLoss: seunBotSignals.stopLoss || stock.price * 0.95,
-          riskReward: calculateRiskReward(stock.price, seunBotSignals.target1, seunBotSignals.stopLoss),
-          volume: stock.volume,
-          timeframe: '1W',
-          seunBotSignal: seunBotSignals.signal,
-          factors: seunBotSignals.factors,
-          isMock: stock.isMock
-        })
-      }
+
+    // Prefer stocks that are flagged ready, then fall back to others
+    const candidates = stocks
+      .filter(s => s.isReadyForPrediction !== false)
+      .slice(0, 30) // cap concurrent batch
+
+    // Fetch all predictions concurrently
+    const results = await Promise.allSettled(
+      candidates.map(stock =>
+        USStocksDataService.fetchUsPrediction(stock.symbol, { maxRetries: 0, retryDelayMs: 3000 })
+          .then(pred => ({ stock, pred }))
+      )
+    )
+
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue
+      const { stock, pred } = result.value
+
+      // Skip syncing ones
+      if (!pred || pred._isSyncing) continue
+
+      // Derive signal strength from finalScore
+      const absScore = Math.abs(Number(pred.finalScore) || 0)
+      if (absScore < 0.5) continue // skip neutral / near-zero signals
+
+      const direction = pred.direction || 'NEUTRAL'
+      const setupType = determineSetupTypeFromPred(pred)
+      const tradePlan = pred.tradePlan
+      const weeklySetup = pred.weeklyTradeSetup
+
+      const currentPrice = pred.currentPrice || stock.price
+      const targetPrice = tradePlan?.takeProfit1 || currentPrice * 1.15
+      const stopLoss = tradePlan?.stopLoss || currentPrice * 0.95
+
+      // Map absScore (0-3) to probability (60-95%)
+      const probability = Math.min(95, Math.round(60 + (absScore / 3) * 35))
+      const confidence = probability >= 80 ? 'High' : probability >= 70 ? 'Medium' : 'Low'
+
+      highProbabilitySetups.push({
+        symbol: stock.symbol,
+        sector: stock.sector || 'Unknown',
+        setupType,
+        probability,
+        confidence,
+        currentPrice,
+        targetPrice,
+        stopLoss,
+        riskReward: calculateRiskReward(currentPrice, targetPrice, stopLoss),
+        volume: stock.volume || 0,
+        timeframe: '1W',
+        seunBotSignal: pred.overallMtfSignal || direction,
+        weeklySetupName: weeklySetup?.setupName,
+        finalScore: pred.finalScore,
+        isMock: false
+      })
     }
-    
+
     return {
       setups: highProbabilitySetups.sort((a, b) => b.probability - a.probability),
-      totalScanned: stocks.length,
+      totalScanned: candidates.length,
       highProbabilityCount: highProbabilitySetups.length,
       scanTime: new Date().toISOString()
     }
   }
 
-  const generateHistoricalData = (currentData, periods) => {
-    const data = []
-    const basePrice = currentData.price
-    
-    for (let i = periods; i >= 0; i--) {
-      const randomChange = (Math.random() - 0.5) * 0.04
-      const price = basePrice * (1 + randomChange * (i / periods))
-      data.push({
-        close: price,
-        volume: currentData.volume * (0.8 + Math.random() * 0.4),
-        high: price * 1.02,
-        low: price * 0.98
-      })
+  /**
+   * Map real API direction/weeklyTradeSetup/RSI to a setup type label.
+   */
+  const determineSetupTypeFromPred = (pred) => {
+    const dir = String(pred?.direction || '').toUpperCase()
+    const rsi = Number(pred?.indicators?.rsi) || 50
+    const weeklyName = String(pred?.weeklyTradeSetup?.setupName || '').toLowerCase()
+
+    if (dir === 'BUY' || dir === 'STRONG BUY') {
+      if (rsi < 35) return 'Oversold Bounce'
+      if (weeklyName === 'bull') return 'Bullish Breakout'
+      return 'Bullish Breakout'
     }
-    
-    return data
+    if (dir === 'SELL' || dir === 'STRONG SELL') {
+      if (rsi > 65) return 'Overbought Pullback'
+      return 'Bearish Breakdown'
+    }
+    return 'Consolidation'
   }
 
   const determineSetupType = (stock, seunBotSignals) => {

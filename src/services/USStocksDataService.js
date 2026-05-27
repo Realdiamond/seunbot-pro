@@ -68,31 +68,130 @@ class USStocksDataService {
     return fallback;
   }
 
+  /**
+   * Fetch list of all tracked US stocks.
+   * Primary: GET /api/UsPrediction/data-summary
+   * Returns an array of { symbol, name, recordCount, isReadyForPrediction }
+   */
   async fetchAssets(forceRefresh = false) {
     const now = Date.now();
     if (!forceRefresh && this.assetsCache.data && (now - this.assetsCache.timestamp) < this.assetsCache.ttl) {
       return this.assetsCache.data;
     }
 
+    // Try the primary endpoint: /api/UsPrediction/data-summary
     try {
-      const response = await axios.get(`${this.assetsApiBaseUrl}/api/UsAssets`, {
+      const response = await axios.get(`${this.assetsApiBaseUrl}/api/UsPrediction/data-summary`, {
         timeout: 15000
       });
-      const raw = Array.isArray(response.data?.data) ? response.data.data : (Array.isArray(response.data) ? response.data : []);
-      
+      const payload = response.data || {};
+      // Shape: { stocks: [{ symbol, name, recordCount, firstDate, lastDate, isReadyForPrediction }] }
+      const rawList = Array.isArray(payload.stocks) ? payload.stocks : [];
+
       const seen = new Map();
-      for (const asset of raw) {
-        const symbol = this.normalizeAssetSymbol(asset.symbol);
+      for (const asset of rawList) {
+        const symbol = this.normalizeAssetSymbol(asset.symbol || '');
         if (!symbol) continue;
-        seen.set(symbol, asset);
+        // Strip the "US_" prefix the backend sometimes returns in name
+        const name = asset.name ? asset.name.replace(/^US_/, '') : symbol;
+        seen.set(symbol, {
+          symbol,
+          name,
+          exchange: 'US',
+          sector: asset.sector || 'Unknown',
+          imageUrl: asset.imageUrl || '',
+          isReadyForPrediction: Boolean(asset.isReadyForPrediction)
+        });
       }
       const assets = Array.from(seen.values());
-
       this.assetsCache = { data: assets, timestamp: now, ttl: this.assetsCache.ttl };
       return assets;
     } catch (error) {
-      console.warn('UsAssets endpoint failed:', error?.message || error);
+      console.warn('UsPrediction/data-summary failed, trying fallback /api/UsPrediction/stocks:', error?.message || error);
+    }
+
+    // Fallback: paginated list endpoint /api/UsPrediction/stocks
+    try {
+      const response = await axios.get(`${this.assetsApiBaseUrl}/api/UsPrediction/stocks`, {
+        params: { page: 1, pageSize: 500 },
+        timeout: 15000
+      });
+      const payload = response.data || {};
+      const rawList = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : []);
+
+      const seen = new Map();
+      for (const asset of rawList) {
+        const symbol = this.normalizeAssetSymbol(asset.symbol || '');
+        if (!symbol) continue;
+        seen.set(symbol, {
+          symbol,
+          name: asset.name || symbol,
+          exchange: 'US',
+          sector: asset.sector || 'Unknown',
+          imageUrl: asset.imageUrl || '',
+          isReadyForPrediction: true
+        });
+      }
+      const assets = Array.from(seen.values());
+      this.assetsCache = { data: assets, timestamp: now, ttl: this.assetsCache.ttl };
+      return assets;
+    } catch (error) {
+      console.warn('UsPrediction/stocks fallback also failed:', error?.message || error);
       return [];
+    }
+  }
+
+  /**
+   * Fetch full SeunBot analysis for a US stock.
+   * GET /api/UsPrediction/{symbol}
+   *
+   * If the response contains status === 'syncing' or 'sync_required',
+   * we retry up to `maxRetries` times with a `retryDelayMs` pause.
+   */
+  async fetchUsPrediction(symbol, { maxRetries = 6, retryDelayMs = 5000 } = {}) {
+    const normalized = this.normalizeAssetSymbol(symbol);
+    let attempt = 0;
+
+    while (attempt <= maxRetries) {
+      try {
+        const response = await axios.get(
+          `${this.assetsApiBaseUrl}/api/UsPrediction/${normalized}`,
+          { timeout: 20000 }
+        );
+
+        const data = response.data || {};
+
+        // Syncing state — backend is still collecting historical data
+        if (data.status === 'syncing' || data.status === 'sync_required') {
+          console.log(`⏳ ${normalized} is syncing (attempt ${attempt + 1}/${maxRetries + 1}):`, data.message);
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, retryDelayMs));
+            attempt++;
+            continue;
+          }
+          // Exceeded retries — return the syncing state for the UI to show
+          return { ...data, _isSyncing: true, symbol: normalized };
+        }
+
+        // Full analysis returned
+        return { ...data, _isSyncing: false, symbol: normalized };
+      } catch (error) {
+        if (error?.response?.status === 404) {
+          // 404 means sync_required (insufficient data)
+          const body = error.response?.data || {};
+          if (body.status === 'sync_required' || body.recordsAvailable !== undefined) {
+            console.log(`⏳ ${normalized} needs backfill (404):`, body.message);
+            if (attempt < maxRetries) {
+              await new Promise(r => setTimeout(r, retryDelayMs));
+              attempt++;
+              continue;
+            }
+            return { ...body, _isSyncing: true, symbol: normalized };
+          }
+        }
+        console.error(`❌ Error fetching UsPrediction for ${normalized}:`, error?.message || error);
+        throw error;
+      }
     }
   }
 
@@ -143,7 +242,7 @@ class USStocksDataService {
     }
 
     try {
-      const response = await axios.get(`${this.assetsApiBaseUrl}/api/UsAssets/live-prices`, {
+      const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets/live-prices`, {
         timeout: 15000
       });
 
@@ -272,7 +371,12 @@ class USStocksDataService {
       const livePrice = livePrices.bySymbol.get(normalized) || null;
 
       if (!asset && !livePrice) {
-        throw new Error(`Asset not found for symbol: ${normalized}`);
+        // Not in asset list yet — build a minimal stub
+        console.warn(`${normalized} not in assets list, returning stub`);
+        return this.mapAssetToStock(
+          { symbol: normalized, name: normalized, exchange: 'US', sector: 'Unknown', imageUrl: '' },
+          { livePrice: null }
+        );
       }
 
       return this.mapAssetToStock(
