@@ -61,14 +61,7 @@ export default function ForexAnalysis({ initialSymbol = 'AUDCAD' }) {
             ))}
           </select>
 
-          <button
-            onClick={refetch}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/30 rounded-xl text-cyan-300 text-sm font-medium transition-all disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          
 
           <div className="flex bg-gray-800 border border-gray-600/60 rounded-xl overflow-hidden">
             {INTERVALS.map(iv => (
