@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const HEROKU_BACKEND = 'https://seun-trading-bot-api-2026-28f6d6f40e1b.herokuapp.com'
+const HEROKU_BACKEND = 'https://seun-trading-bot-production.up.railway.app'
 
 export default defineConfig({
   plugins: [react()],
