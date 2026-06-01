@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Target, RefreshCw, AlertTriangle, Filter, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useForexPairs } from '../../hooks/useForexPairs'
-import PairTable from '../crypto/PairTable'
+import ForexPairTable from './ForexPairTable'
 
 export default function ForexSetups() {
   const { pairs, metadata, loading, error, refetch } = useForexPairs()
@@ -69,13 +69,13 @@ export default function ForexSetups() {
       )}
 
       <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl overflow-hidden">
-        <PairTable
+        <ForexPairTable
           rows={filteredPairs}
           loading={loading}
           sortBy="priceChangePercent24h"
           sortDir="desc"
           onSort={() => {}}
-          selectedCoin={selected}
+          selectedPair={selected}
           onSelect={(pair) => setSelected(pair)}
         />
       </div>

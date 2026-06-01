@@ -12,11 +12,9 @@ import CyclePanel from '../crypto/CyclePanel'
 import TradePlan from '../crypto/TradePlan'
 import SignalsList from '../crypto/SignalsList'
 import CryptoPatterns from '../crypto/CryptoPatterns'
+import { fmtPrice, formatPair } from './utils'
 
 const INTERVALS = ['1m', '1h', '1d']
-
-const formatPair = (symbol = '') =>
-  symbol.length === 6 ? `${symbol.slice(0, 3)}/${symbol.slice(3)}` : symbol
 
 export default function ForexAnalysis({ initialSymbol = 'AUDCAD' }) {
   const location = useLocation()
@@ -95,6 +93,27 @@ export default function ForexAnalysis({ initialSymbol = 'AUDCAD' }) {
           <Clock className="w-3.5 h-3.5" />
           Analysis as of {new Date(analysis.analysisTimestamp).toLocaleString()}
           {analysis.typeOfAnalysis && ` · ${analysis.typeOfAnalysis}`}
+        </div>
+      )}
+
+      {analysis && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-400">
+          <div className="glass-effect rounded-xl p-3">
+            <div className="text-gray-500">Symbol</div>
+            <div className="text-white font-semibold">{analysis.symbol ?? symbol}</div>
+          </div>
+          <div className="glass-effect rounded-xl p-3">
+            <div className="text-gray-500">Category</div>
+            <div className="text-white font-semibold">{analysis.category ?? '—'}</div>
+          </div>
+          <div className="glass-effect rounded-xl p-3">
+            <div className="text-gray-500">Interval</div>
+            <div className="text-white font-semibold">{analysis.interval ?? interval}</div>
+          </div>
+          <div className="glass-effect rounded-xl p-3">
+            <div className="text-gray-500">Current Price</div>
+            <div className="text-white font-semibold">{fmtPrice(analysis.currentPrice)}</div>
+          </div>
         </div>
       )}
 

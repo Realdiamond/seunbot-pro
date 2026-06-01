@@ -7,7 +7,7 @@ import { fetchForexPairs } from '../services/ForexAPIService'
 
 const REFRESH_MS = 5 * 60 * 1000
 
-export function useForexPairs(page = 1, pageSize = 200) {
+export function useForexPairs(page = 1, pageSize = 20) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
