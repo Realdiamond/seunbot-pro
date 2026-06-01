@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useMemo, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import {
   BarChart3, Globe, MapPin, Target,
-  Menu, X, Home, Brain, DollarSign
+  Menu, X, Home, Brain, DollarSign, Repeat
 } from 'lucide-react'
 import NGXDashboard from './components/NGXDashboard'
 import NGXAdvancedAnalysis from './components/NGXAdvancedAnalysis'
@@ -12,6 +12,9 @@ import './App.css'
 const CryptoDashboard  = lazy(() => import('./components/crypto/CryptoDashboard'))
 const CryptoAnalysis   = lazy(() => import('./components/crypto/CryptoAnalysis'))
 const CryptoSetups     = lazy(() => import('./components/crypto/CryptoSetups'))
+const ForexDashboard   = lazy(() => import('./components/forex/ForexDashboard'))
+const ForexAnalysis    = lazy(() => import('./components/forex/ForexAnalysis'))
+const ForexSetups      = lazy(() => import('./components/forex/ForexSetups'))
 const USStocksDashboard = lazy(() => import('./components/USStocksDashboard'))
 const USStocksAdvancedAnalysis = lazy(() => import('./components/USStocksAdvancedAnalysis'))
 const USStocksWeeklySetupsPanel = lazy(() => import('./components/USStocksWeeklySetupsPanel'))
@@ -25,18 +28,20 @@ function App() {
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean)
 
-    const valid = requested.filter((value) => ['crypto', 'ngx', 'usstocks'].includes(value))
+    const valid = requested.filter((value) => ['crypto', 'forex', 'ngx', 'usstocks'].includes(value))
     return valid.length > 0 ? Array.from(new Set(valid)) : ['ngx']
   }, [])
 
   const hasCrypto = enabledMarkets.includes('crypto')
+  const hasForex = enabledMarkets.includes('forex')
   const hasNgx = enabledMarkets.includes('ngx')
   const hasUsStocks = enabledMarkets.includes('usstocks')
-  const defaultMarket = hasCrypto ? 'crypto' : hasNgx ? 'ngx' : enabledMarkets[0]
+  const defaultMarket = hasCrypto ? 'crypto' : hasForex ? 'forex' : hasNgx ? 'ngx' : enabledMarkets[0]
 
   const getInitialMarket = () => {
     if (typeof window === 'undefined') return defaultMarket
     const path = window.location.pathname
+    if (path.startsWith('/forex') && hasForex) return 'forex'
     if (path.startsWith('/ngx') && hasNgx) return 'ngx'
     if (path.startsWith('/usstocks') && hasUsStocks) return 'usstocks'
     if (hasCrypto) return 'crypto'
@@ -46,6 +51,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentMarket, setCurrentMarket] = useState(getInitialMarket())
   const [selectedCryptoPair, setSelectedCryptoPair] = useState('BTCUSDT')
+  const [selectedForexPair, setSelectedForexPair] = useState('AUDCAD')
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -57,6 +63,8 @@ function App() {
     setSidebarOpen(false)
     if (market === 'crypto') {
       navigate('/')
+    } else if (market === 'forex') {
+      navigate('/forex')
     } else if (market === 'usstocks') {
       navigate('/usstocks')
     } else if (market === 'ngx') {
@@ -65,8 +73,7 @@ function App() {
   }
 
   const activeMarket = enabledMarkets.includes(currentMarket) ? currentMarket : defaultMarket
-  const marketSelectorCols = enabledMarkets.length >= 3 ? 'grid-cols-3' : enabledMarkets.length === 2 ? 'grid-cols-2' : 'grid-cols-1'
-  const fallbackRoute = hasCrypto ? '/' : hasNgx ? '/ngx' : '/usstocks'
+  const fallbackRoute = hasCrypto ? '/' : hasForex ? '/forex' : hasNgx ? '/ngx' : '/usstocks'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
@@ -97,11 +104,11 @@ function App() {
             {/* Market Selector */}
             <div className="p-4 border-b border-gray-700">
               <div className="text-xs text-gray-400 mb-2">Select Market</div>
-              <div className={`grid ${marketSelectorCols} gap-2`}>
+              <div className="flex flex-wrap gap-2">
                 {hasCrypto && (
                 <button
                   onClick={() => switchMarket('crypto')}
-                  className={`p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'crypto'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -111,10 +118,23 @@ function App() {
                   Crypto
                 </button>
                 )}
+                {hasForex && (
+                <button
+                  onClick={() => switchMarket('forex')}
+                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
+                    activeMarket === 'forex'
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  <Repeat className="h-4 w-4 mx-auto mb-1" />
+                  Forex
+                </button>
+                )}
                 {hasNgx && (
                 <button
                   onClick={() => switchMarket('ngx')}
-                  className={`p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'ngx'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -127,7 +147,7 @@ function App() {
                 {hasUsStocks && (
                 <button
                   onClick={() => switchMarket('usstocks')}
-                  className={`p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'usstocks'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -170,6 +190,40 @@ function App() {
                     onClick={() => setSidebarOpen(false)}
                     className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
                       isActive ? 'bg-blue-600/20 text-blue-400 font-semibold border border-blue-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <Target className="h-5 w-5" />
+                    <span>Weekly Setups</span>
+                  </NavLink>
+                </>
+              ) : activeMarket === 'forex' && hasForex ? (
+                <>
+                  <NavLink
+                    to="/forex"
+                    end
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-cyan-600/20 text-cyan-300 font-semibold border border-cyan-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <Home className="h-5 w-5" />
+                    <span>Forex Dashboard</span>
+                  </NavLink>
+                  <NavLink
+                    to="/forex-analysis"
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-cyan-600/20 text-cyan-300 font-semibold border border-cyan-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <Brain className="h-5 w-5" />
+                    <span>Advanced Analysis</span>
+                  </NavLink>
+                  <NavLink
+                    to="/forex-setups"
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) => `flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                      isActive ? 'bg-cyan-600/20 text-cyan-300 font-semibold border border-cyan-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                     }`}
                   >
                     <Target className="h-5 w-5" />
@@ -255,6 +309,11 @@ function App() {
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-green-400 text-sm">Crypto Markets Open</span>
                 </div>
+              ) : activeMarket === 'forex' && hasForex ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-green-400 text-sm">Forex Markets Open</span>
+                </div>
               ) : activeMarket === 'usstocks' && hasUsStocks ? (
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -296,6 +355,15 @@ function App() {
                   </>
                 ) : (
                   <Route path="/" element={<Navigate to={fallbackRoute} replace />} />
+                )}
+
+                {/* Forex Routes */}
+                {hasForex && (
+                  <>
+                    <Route path="/forex" element={<ForexDashboard onSelectPair={setSelectedForexPair} />} />
+                    <Route path="/forex-analysis" element={<ForexAnalysis initialSymbol={selectedForexPair} />} />
+                    <Route path="/forex-setups" element={<ForexSetups />} />
+                  </>
                 )}
 
                 {/* NGX Routes */}
