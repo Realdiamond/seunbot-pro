@@ -104,11 +104,11 @@ function App() {
             {/* Market Selector */}
             <div className="p-4 border-b border-gray-700">
               <div className="text-xs text-gray-400 mb-2">Select Market</div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {hasCrypto && (
                 <button
                   onClick={() => switchMarket('crypto')}
-                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`w-full p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'crypto'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -121,7 +121,7 @@ function App() {
                 {hasForex && (
                 <button
                   onClick={() => switchMarket('forex')}
-                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`w-full p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'forex'
                       ? 'bg-cyan-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -134,7 +134,7 @@ function App() {
                 {hasNgx && (
                 <button
                   onClick={() => switchMarket('ngx')}
-                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`w-full p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'ngx'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -147,7 +147,7 @@ function App() {
                 {hasUsStocks && (
                 <button
                   onClick={() => switchMarket('usstocks')}
-                  className={`flex-1 min-w-[110px] p-3 rounded-lg text-xs font-medium transition-colors ${
+                  className={`w-full p-3 rounded-lg text-xs font-medium transition-colors ${
                     activeMarket === 'usstocks'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
