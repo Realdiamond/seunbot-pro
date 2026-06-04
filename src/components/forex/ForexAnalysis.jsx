@@ -12,6 +12,8 @@ import CyclePanel from '../crypto/CyclePanel'
 import TradePlan from '../crypto/TradePlan'
 import SignalsList from '../crypto/SignalsList'
 import CryptoPatterns from '../crypto/CryptoPatterns'
+import SignalHistory from '../SignalHistory'
+import ElliottWavePanel from '../crypto/ElliottWavePanel'
 import { fmtPrice, formatPair } from './utils'
 
 const INTERVALS = ['1m', '1h', '1d']
@@ -152,7 +154,11 @@ export default function ForexAnalysis({ initialSymbol = 'AUDCAD' }) {
             </div>
           </div>
 
+          <ElliottWavePanel analysis={analysis} />
+
           <SignalsList analysis={analysis} />
+
+          <SignalHistory market="forex" symbol={symbol} title="Prediction History" />
         </div>
       ) : null}
     </div>

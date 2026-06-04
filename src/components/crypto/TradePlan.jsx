@@ -1,6 +1,6 @@
 import React from 'react'
 import { ShieldCheck, ShieldOff } from 'lucide-react'
-import { fmt, fmtPrice } from './utils'
+import { fmt, fmtPrice, HorizonPill } from './utils'
 
 function Row({ label, value, valueClass = 'text-white' }) {
   return (
@@ -29,13 +29,25 @@ export default function TradePlan({ analysis }) {
   }
 
   const isBuy = tp.direction === 'BUY'
+  const strength = tp.signalStrength
+  const hasStrength = strength != null && !Number.isNaN(Number(strength))
 
   return (
     <div className={`glass-effect rounded-2xl p-5 border ${isBuy ? 'border-green-500/30' : 'border-red-500/30'}`}>
       <div className="flex items-center gap-2 mb-4">
         <ShieldCheck className={`w-5 h-5 ${isBuy ? 'text-green-400' : 'text-red-400'}`} />
         <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Trade Plan</h3>
-        <span className={`ml-auto px-3 py-0.5 rounded-full text-xs font-bold ${
+        {hasStrength && (
+          <span
+            title="Signal strength drives position size and risk:reward"
+            className={`ml-auto px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+              tp.isStrongSignal ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'
+            }`}
+          >
+            {tp.isStrongSignal ? 'STRONG' : 'NORMAL'} · {fmt(strength, 1)}
+          </span>
+        )}
+        <span className={`${hasStrength ? '' : 'ml-auto'} px-3 py-0.5 rounded-full text-xs font-bold ${
           isBuy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
         }`}>
           {tp.direction}
@@ -50,11 +62,17 @@ export default function TradePlan({ analysis }) {
           <Row label="Take Profit 2" value={fmtPrice(tp.takeProfit2)} valueClass="text-emerald-400" />
         </div>
         <div>
-          <Row label="Position Size" value={`${fmt(tp.positionSizePct, 1)}%`} />
+          <Row label="Position Size" value={`${fmt(tp.positionSizePct, 1)}%`} valueClass={tp.isStrongSignal ? 'text-purple-300' : 'text-white'} />
           <Row label="Risk Amount"   value={fmtPrice(tp.riskAmount)} valueClass="text-amber-400" />
           <Row label="R:R to TP1"   value={`1 : ${fmt(tp.riskRewardRatio1, 2)}`} />
           <Row label="R:R to TP2"   value={`1 : ${fmt(tp.riskRewardRatio2, 2)}`} />
         </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+        <span className="uppercase tracking-wider">Plan window:</span>
+        <HorizonPill predictedAt={analysis?.analysisTimestamp} timeframe={tp.timeframe} />
+        {tp.timeframe && <span className="text-gray-500">· {tp.timeframe}</span>}
       </div>
 
       {tp.reason && (

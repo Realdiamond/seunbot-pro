@@ -57,6 +57,62 @@ export const SIGNAL_STYLES = {
 export const signalStyle = (sig) =>
   SIGNAL_STYLES[sig] ?? SIGNAL_STYLES['NEUTRAL']
 
+// ── Signal horizon / timing indicator ──────────────────────────────────────────
+// Given when a signal/trade-plan was produced and its timeframe, describe the window
+// the plan is FOR relative to today: "Yesterday", "For Today", "For Tomorrow",
+// "In N days", "Coming days/weeks". Used as the signal-history time-indicator column.
+
+const MS_PER_DAY = 86400000
+
+const startOfDay = (d) => {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+// How far ahead a freshly-generated signal stays actionable, by timeframe.
+const horizonDays = (timeframe = '') => {
+  const tf = String(timeframe).toLowerCase()
+  if (tf.includes('month')) return 30
+  if (tf.includes('week')) return 7
+  if (tf.includes('h4') || tf.includes('hour') || tf.includes('intraday')) return 1
+  return 1 // daily / default → next session
+}
+
+export const signalHorizon = (predictedAt, timeframe = 'Daily') => {
+  if (!predictedAt) return null
+  const made = new Date(predictedAt)
+  if (Number.isNaN(made.getTime())) return null
+
+  const target = new Date(made.getTime() + horizonDays(timeframe) * MS_PER_DAY)
+  const dayDiff = Math.round((startOfDay(target) - startOfDay(new Date())) / MS_PER_DAY)
+
+  if (dayDiff < -1) return { label: `${Math.abs(dayDiff)}d ago`, tone: 'past', icon: '📁' }
+  if (dayDiff === -1) return { label: 'Yesterday', tone: 'past', icon: '📁' }
+  if (dayDiff === 0) return { label: 'For Today', tone: 'today', icon: '⚡' }
+  if (dayDiff === 1) return { label: 'For Tomorrow', tone: 'soon', icon: '🌅' }
+  if (dayDiff <= 7) return { label: `In ${dayDiff} days`, tone: 'coming', icon: '📅' }
+  return { label: 'Coming weeks', tone: 'coming', icon: '📅' }
+}
+
+export const HORIZON_TONE = {
+  past:   'bg-gray-500/20 text-gray-400',
+  today:  'bg-amber-500/20 text-amber-300',
+  soon:   'bg-sky-500/20 text-sky-300',
+  coming: 'bg-violet-500/20 text-violet-300',
+}
+
+// Small inline pill for the horizon indicator.
+export const HorizonPill = ({ predictedAt, timeframe, className = '' }) => {
+  const h = signalHorizon(predictedAt, timeframe)
+  if (!h) return null
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${HORIZON_TONE[h.tone]} ${className}`}>
+      <span>{h.icon}</span>{h.label}
+    </span>
+  )
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 export const Skeleton = ({ className = '' }) => (
   <div className={`skeleton rounded-lg ${className}`} />
