@@ -85,10 +85,18 @@ class RealNGXDataService {
     }
 
     const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets`, {
+      params: {
+        pageSize: 1000 // Fetch all assets since the endpoint is paginated (default 50)
+      },
       timeout: 15000
     });
 
-    const raw = Array.isArray(response.data?.data) ? response.data.data : [];
+    // Handle both { data: [...] } and direct [...] arrays just in case, plus parse string if backend sends bad Content-Type
+    let payload = response.data;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch(e) {}
+    }
+    const raw = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
 
     // Filter to keep ONLY NGX assets!
     const ngxRaw = raw.filter(asset => 
