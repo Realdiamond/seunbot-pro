@@ -11,6 +11,7 @@ import EnhancedNGXWebScraper from '../services/EnhancedNGXWebScraper'
 import RealNGXDataService from '../services/RealNGXDataService'
 import AIAnalysisEndpointService from '../services/AIAnalysisEndpointService'
 import { ngxWebSocket } from '../services/WebSocketService'
+import SignalHistory from './SignalHistory'
 
 const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
   const [activeTab, setActiveTab] = useState('smartMoney')
@@ -767,6 +768,13 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
           </button>
         </div>
       </div>
+
+      {/* Prediction history with time-horizon indicator */}
+      {selectedStock && (
+        <div className="mb-6">
+          <SignalHistory market="ngx" symbol={String(selectedStock).replace(/^NSENG_/i, '')} title="Prediction History" />
+        </div>
+      )}
 
       {/* Real-time data indicator */}
       {realTimeData && (

@@ -476,13 +476,19 @@ class RealNGXDataService {
         })
         .map((asset) => this.toNsengSymbol(asset.symbol));
 
-      // Limit bulk prediction fallback requests to avoid performance lock/hang.
-      // If there are too many symbols missing live prices, skip bulk predictions on load.
+      // Resolve missing live prices via the prediction fallback. Requests are already
+      // chunked (predictionBatchSize at a time) inside fetchPredictionPricesForSymbols,
+      // so we can safely process the full set instead of skipping when >15 — skipping
+      // was leaving most NGX stocks without a price. A generous cap guards against
+      // pathological cases; anything beyond it still renders via verify/last-close.
+      const MAX_PREDICTION_FALLBACK = 120;
       let predictionFallbackMap = new Map();
-      if (symbolsMissingLivePrice.length > 0 && symbolsMissingLivePrice.length <= 15) {
-        predictionFallbackMap = await this.fetchPredictionPricesForSymbols(symbolsMissingLivePrice);
-      } else if (symbolsMissingLivePrice.length > 15) {
-        console.warn(`⚠️ ${symbolsMissingLivePrice.length} symbols missing live prices. Skipping bulk prediction fallback to prevent performance lock.`);
+      if (symbolsMissingLivePrice.length > 0) {
+        const toResolve = symbolsMissingLivePrice.slice(0, MAX_PREDICTION_FALLBACK);
+        if (symbolsMissingLivePrice.length > MAX_PREDICTION_FALLBACK) {
+          console.warn(`⚠️ ${symbolsMissingLivePrice.length} symbols missing live prices; resolving the first ${MAX_PREDICTION_FALLBACK} via prediction fallback.`);
+        }
+        predictionFallbackMap = await this.fetchPredictionPricesForSymbols(toResolve);
       }
 
       return assets.map((asset) => {

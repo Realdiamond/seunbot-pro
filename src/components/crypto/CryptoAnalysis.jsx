@@ -11,6 +11,8 @@ import MultiTimeframe   from './MultiTimeframe'
 import CyclePanel       from './CyclePanel'
 import TradePlan        from './TradePlan'
 import SignalsList      from './SignalsList'
+import SignalHistory    from '../SignalHistory'
+import ElliottWavePanel from './ElliottWavePanel'
 import CryptoPatterns   from './CryptoPatterns'
 import { coinSymbol }   from './utils'
 
@@ -137,8 +139,14 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
             </div>
           </div>
 
+          {/* 4b — Elliott Wave count */}
+          <ElliottWavePanel analysis={analysis} />
+
           {/* 5 — Signals list */}
           <SignalsList analysis={analysis} />
+
+          {/* 6 — Prediction history */}
+          <SignalHistory market="crypto" symbol={symbol} title="Prediction History" />
         </div>
       ) : null}
     </div>

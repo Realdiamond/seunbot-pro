@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import USStocksDataService from '../services/USStocksDataService'
 import { usStocksWebSocket } from '../services/WebSocketService'
+import { HorizonPill } from './crypto/utils'
 
 // ─────────────────────────────────────────────────────
 // Helpers
@@ -960,6 +961,7 @@ const HistoryTab = ({ history }) => {
                 <span className="sm:hidden">Recommendation</span>
               </th>
               <th className="px-2 py-3 sm:px-4 text-right text-xs sm:text-sm hidden sm:table-cell">Final Score</th>
+              <th className="px-2 py-3 sm:px-4 text-xs sm:text-sm">Horizon</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700 text-gray-300">
@@ -982,6 +984,9 @@ const HistoryTab = ({ history }) => {
                 </td>
                 <td className={`px-2 py-3 sm:px-4 font-bold text-right text-xs hidden sm:table-cell ${h.finalScore >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {h.finalScore != null ? (h.finalScore > 0 ? `+${h.finalScore.toFixed(3)}` : h.finalScore.toFixed(3)) : '—'}
+                </td>
+                <td className="px-2 py-3 sm:px-4 text-xs">
+                  <HorizonPill predictedAt={h.predictedAt || h.createdAt} timeframe={h.timeframe || 'Daily'} />
                 </td>
               </tr>
             ))}
