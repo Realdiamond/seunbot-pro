@@ -52,6 +52,7 @@ function App() {
   const [currentMarket, setCurrentMarket] = useState(getInitialMarket())
   const [selectedCryptoPair, setSelectedCryptoPair] = useState('BTCUSDT')
   const [selectedForexPair, setSelectedForexPair] = useState('AUDCAD')
+  const [selectedNgxStock, setSelectedNgxStock] = useState('GTCO')
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -369,13 +370,13 @@ function App() {
                 {/* NGX Routes */}
                 {hasNgx && (
                   <>
-                    <Route path="/ngx" element={<NGXDashboard />} />
+                    <Route path="/ngx" element={<NGXDashboard onSelectPair={setSelectedNgxStock} initialSymbol={selectedNgxStock} />} />
                     <Route
                       path="/ngx-analysis"
                       element={
                         <div className="space-y-6">
-                          <NGXDashboard />
-                          <NGXAdvancedAnalysis selectedStock="GTCO" marketData={[]} />
+                          <NGXDashboard onSelectPair={setSelectedNgxStock} initialSymbol={selectedNgxStock} />
+                          <NGXAdvancedAnalysis selectedStock={selectedNgxStock} marketData={[]} />
                         </div>
                       }
                     />

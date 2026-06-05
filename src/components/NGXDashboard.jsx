@@ -11,17 +11,21 @@ import AIMarketSummary from './AIMarketSummary'
 import RealNGXDataService from '../services/RealNGXDataService'
 import { ngxWebSocket } from '../services/WebSocketService'
 
-const NGXDashboard = () => {
-  const [selectedStock, setSelectedStock] = useState('GTCO')
-  const [allStocks, setAllStocks] = useState([])
-  const [marketSummary, setMarketSummary] = useState(null)
-  const [loading, setLoading] = useState(true)
+let globalCachedStocks = [];
+let globalCachedSummary = null;
+let globalLastUpdate = null;
+
+const NGXDashboard = ({ onSelectPair, initialSymbol = 'GTCO' }) => {
+  const [selectedStock, setSelectedStock] = useState(initialSymbol)
+  const [allStocks, setAllStocks] = useState(globalCachedStocks)
+  const [marketSummary, setMarketSummary] = useState(globalCachedSummary)
+  const [loading, setLoading] = useState(globalCachedStocks.length === 0)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSector, setSelectedSector] = useState('All')
   const [selectedType, setSelectedType] = useState('All') // New: Stock vs ETF filter
   const [viewMode, setViewMode] = useState('analysis')
   const [watchlist, setWatchlist] = useState(['GTCO', 'DANGCEM', 'MTNN', 'ZENITHBANK'])
-  const [lastUpdate, setLastUpdate] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(globalLastUpdate)
   const [wsStatus, setWsStatus] = useState('disconnected')
   const [mobileAssetQuery, setMobileAssetQuery] = useState('')
   const [showMobileAssetPicker, setShowMobileAssetPicker] = useState(false)
@@ -29,6 +33,19 @@ const NGXDashboard = () => {
 
   const sectors = ['All', 'Banking', 'Oil & Gas', 'Consumer Goods', 'Telecommunications', 'Industrial Goods', 'Insurance', 'Conglomerates', 'Healthcare', 'ETF']
   const types = ['All', 'Stock', 'ETF']
+
+  const handleStockSelect = useCallback((symbol) => {
+    setSelectedStock(symbol);
+    if (onSelectPair) {
+      onSelectPair(symbol);
+    }
+  }, [onSelectPair]);
+
+  useEffect(() => {
+    if (initialSymbol && initialSymbol !== selectedStock) {
+      setSelectedStock(initialSymbol);
+    }
+  }, [initialSymbol]);
 
   // WebSocket price update handler
   const handleWsUpdate = useCallback((update) => {
@@ -49,6 +66,7 @@ const NGXDashboard = () => {
           ? update.sources
           : (update.source ? [update.source] : updated[idx].sources)
       }
+      globalCachedStocks = updated;
       return updated
     })
   }, [])
@@ -56,13 +74,14 @@ const NGXDashboard = () => {
   useEffect(() => {
     loadNGXData()
     
-    // Refresh market summary every 5 minutes
+    // Refresh market summary every 20 minutes
     const interval = setInterval(async () => {
       try {
         const summary = await RealNGXDataService.fetchMarketSummary()
         setMarketSummary(summary)
+        globalCachedSummary = summary;
       } catch (e) { /* ignore */ }
-    }, 5 * 60 * 1000)
+    }, 20 * 60 * 1000)
 
     return () => {
       clearInterval(interval)
@@ -94,7 +113,9 @@ const NGXDashboard = () => {
   }, [searchTerm, selectedSector, selectedType, viewMode])
 
   const loadNGXData = async () => {
-    setLoading(true)
+    if (globalCachedStocks.length === 0) {
+      setLoading(true)
+    }
     try {
       console.log('📊 Loading real NGX data (145 stocks + 15 ETFs)...')
       
@@ -106,8 +127,12 @@ const NGXDashboard = () => {
       console.log(`✅ Loaded ${stocks.length} securities from sources:`, summary.sources)
 
       setAllStocks(stocks)
+      globalCachedStocks = stocks;
       setMarketSummary(summary)
-      setLastUpdate(new Date())
+      globalCachedSummary = summary;
+      const now = new Date()
+      setLastUpdate(now)
+      globalLastUpdate = now;
 
       // Seed WebSocket cache and connect
       ngxWebSocket.seedCache(stocks)
@@ -173,7 +198,7 @@ const NGXDashboard = () => {
   }, [allStocks, mobileAssetQuery])
 
   const handleMobileAssetSelect = (stock) => {
-    setSelectedStock(stock.symbol)
+    handleStockSelect(stock.symbol)
     setViewMode('analysis')
     setSearchTerm(stock.symbol)
     setMobileAssetQuery(stock.symbol)
@@ -527,7 +552,7 @@ const NGXDashboard = () => {
                         return (
                           <div
                             key={stock.symbol}
-                            onClick={() => setSelectedStock(stock.symbol)}
+                            onClick={() => handleStockSelect(stock.symbol)}
                             className={`p-3 rounded-lg cursor-pointer transition-colors ${
                               selectedStock === stock.symbol
                                 ? 'bg-green-500/20 border border-green-500/40'
@@ -735,7 +760,7 @@ const NGXDashboard = () => {
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end space-x-2">
                                 <button
-                                  onClick={() => setSelectedStock(stock.symbol)}
+                                  onClick={() => handleStockSelect(stock.symbol)}
                                   className="p-1 text-blue-400 hover:text-blue-300"
                                 >
                                   <Eye className="h-4 w-4" />
