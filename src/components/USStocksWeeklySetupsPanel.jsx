@@ -30,6 +30,26 @@ const USStocksWeeklySetupsPanel = () => {
     setScanProgress({ done: 0, total: 14 }) // watchlist is 14 stocks
 
     try {
+      // Preferred: backend-scanned setups (GET /api/UsPrediction/dashboard/setups) — one
+      // fast cached call across all US stocks with data. Falls through to the client-side
+      // watchlist scan below if it's unavailable or returns nothing.
+      try {
+        const data = await USStocksDataService.fetchWeeklySetups({ minProbability: 50, maxResults: 50 })
+        const backendSetups = Array.isArray(data?.setups) ? data.setups.map(mapBackendSetup) : []
+        if (backendSetups.length > 0) {
+          setScanProgress({ done: 14, total: 14 })
+          setWeeklySetups({
+            setups: backendSetups.sort((a, b) => b.probability - a.probability),
+            totalScanned: data.totalScanned ?? backendSetups.length,
+            highProbabilityCount: data.highProbabilityCount ?? backendSetups.length,
+            scanTime: data.scanTime || new Date().toISOString()
+          })
+          return // finally{} clears loading
+        }
+      } catch (backendErr) {
+        console.warn('Backend US setups unavailable, falling back to client scan:', backendErr?.message)
+      }
+
       // Single call to POST /api/UsPrediction/watchlist/analyze (Ep.6)
       // Returns buySignals[], sellSignals[], holdSignals[] — all pre-analyzed
       setScanProgress({ done: 7, total: 14 })
@@ -97,6 +117,32 @@ const USStocksWeeklySetupsPanel = () => {
       setLoading(false)
     }
   }, [])
+
+  // Map a backend setup (GET /dashboard/setups) into the shape this panel renders.
+  const mapBackendSetup = (s) => {
+    const type = String(s.setupType || '')
+    const isBear = /bear|breakdown|overbought|selling/i.test(type)
+    const isBull = !isBear && /bull|oversold|breakout|momentum/i.test(type)
+    const signal = isBull ? 'BUY' : isBear ? 'SELL' : 'HOLD'
+    const probability = Number(s.probability) || 0
+    return {
+      symbol: s.symbol,
+      sector: s.sector || 'US',
+      setupType: type,
+      probability,
+      confidence: s.confidence || (probability >= 80 ? 'High' : probability >= 65 ? 'Medium' : 'Low'),
+      currentPrice: Number(s.currentPrice) || 0,
+      targetPrice: Number(s.targetPrice) || 0,
+      stopLoss: Number(s.stopLoss) || 0,
+      riskReward: s.riskReward != null ? String(s.riskReward) : '—',
+      volume: Number(s.volume) || 0,
+      timeframe: s.timeframe || '1D',
+      seunBotSignal: signal,
+      weeklySetupName: signal,
+      finalScore: s.finalScore ?? null,
+      isMock: false
+    }
+  }
 
   // Build a setup entry from a normalized prediction
   const buildSetup = (pred, stockOverride = null) => {
