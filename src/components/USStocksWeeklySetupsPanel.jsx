@@ -136,7 +136,7 @@ const USStocksWeeklySetupsPanel = () => {
       stopLoss: Number(s.stopLoss) || 0,
       riskReward: s.riskReward != null ? String(s.riskReward) : '—',
       volume: Number(s.volume) || 0,
-      timeframe: s.timeframe || '1D',
+      timeframe: s.timeframe || '1W',
       seunBotSignal: signal,
       weeklySetupName: signal,
       finalScore: s.finalScore ?? null,
