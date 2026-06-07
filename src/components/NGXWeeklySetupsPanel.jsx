@@ -6,35 +6,57 @@ import {
   Building, Fuel, Package, Phone, Factory, Shield,
   ArrowUp, ArrowDown, MapPin, Calendar, Bell
 } from 'lucide-react'
-import NGXWebScraper from '../services/NGXWebScraper'
+import axios from 'axios'
+
+const API_BASE_URL = import.meta.env.VITE_SEUNBOT_API_BASE_URL || ''
 
 const NGXWeeklySetupsPanel = () => {
   const [weeklySetups, setWeeklySetups] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [selectedSector, setSelectedSector] = useState('All')
   const [selectedSetupType, setSelectedSetupType] = useState('All')
-  const [minProbability, setMinProbability] = useState(70)
+  const [minProbability, setMinProbability] = useState(60)
   const [sortBy, setSortBy] = useState('probability')
   const [watchlist, setWatchlist] = useState([])
 
-  const sectors = ['All', 'Banking', 'Oil & Gas', 'Consumer Goods', 'Telecommunications', 'Industrial Goods', 'Insurance']
+  const sectors = ['All', 'Banking', 'Oil & Gas', 'Consumer Goods', 'Telecommunications', 'Industrial Goods', 'Insurance', 'ICT', 'Healthcare', 'Financial Services']
   const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
 
   useEffect(() => {
     loadWeeklySetups()
     
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(loadWeeklySetups, 300000)
+    // Auto-refresh every 10 minutes
+    const interval = setInterval(loadWeeklySetups, 600000)
     return () => clearInterval(interval)
   }, [])
 
   const loadWeeklySetups = async () => {
     setLoading(true)
+    setError(null)
     try {
-      const setups = await NGXWebScraper.scanWeeklyHighProbabilitySetups()
-      setWeeklySetups(setups)
-    } catch (error) {
-      console.error('Error loading weekly setups:', error)
+      console.log('📊 Fetching NGX weekly setups from backend API...')
+      const response = await axios.get(`${API_BASE_URL}/api/NGXAnalysis/dashboard/setups`, {
+        params: {
+          minProbability: 60,
+          maxResults: 50
+        },
+        timeout: 30000
+      })
+      
+      // Transform backend response to match expected format
+      const data = response.data
+      setWeeklySetups({
+        totalScanned: data.totalScanned || 0,
+        highProbabilityCount: data.highProbabilityCount || 0,
+        timestamp: data.timestamp || Date.now(),
+        setups: data.setups || []
+      })
+      console.log(`✅ Loaded ${data.setups?.length || 0} NGX setups from backend`)
+    } catch (err) {
+      console.error('Error loading weekly setups:', err)
+      setError(err.message || 'Failed to load setups')
+      setWeeklySetups(null)
     } finally {
       setLoading(false)
     }
@@ -113,6 +135,31 @@ const NGXWeeklySetupsPanel = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
             <p className="text-gray-400">Scanning Nigerian stocks for high probability setups...</p>
             <p className="text-sm text-gray-500">Analyzing technical patterns, volume, and market structure</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="glass-effect rounded-lg p-6">
+        <div className="flex items-center space-x-2 mb-4">
+          <AlertTriangle className="h-5 w-5 text-red-500" />
+          <h3 className="text-lg font-semibold text-white">NGX Weekly High Probability Setups</h3>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-red-400 mb-2">Failed to load setups</p>
+            <p className="text-sm text-gray-500 mb-4">{error}</p>
+            <button
+              onClick={loadWeeklySetups}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors flex items-center space-x-2 mx-auto"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Retry</span>
+            </button>
           </div>
         </div>
       </div>
