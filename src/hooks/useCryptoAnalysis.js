@@ -26,8 +26,8 @@ export function useCryptoAnalysis(symbol, interval = '1d') {
 
     try {
       const data = await fetchCryptoAnalysis(symbol, interval, {
-        maxRetries: 8,       // max ~32s of polling (was 20 retries = 60s)
-        retryDelayMs: 4000,  // 4s between retries
+        maxRetries: 6,       // max ~18s of polling (reduced for faster feedback)
+        retryDelayMs: 3000,  // 3s between retries
         onSyncing: (body) => {
           if (abortRef.current) return
           setSyncing(true)

@@ -48,18 +48,19 @@ export async function fetchCryptoDashboard() {
  * @param {string} symbol
  * @param {string} interval     - one of: 1m 5m 15m 1h 4h 1d
  * @param {object} [opts]
- * @param {number} [opts.maxRetries=8]       - max polling attempts before giving up
- * @param {number} [opts.retryDelayMs=4000]  - ms between retries
+ * @param {number} [opts.maxRetries=6]       - max polling attempts before giving up (reduced from 8)
+ * @param {number} [opts.retryDelayMs=3000]  - ms between retries (reduced from 4000)
  * @param {function} [opts.onSyncing]        - called on each 202 with sync progress body
  */
 export async function fetchCryptoAnalysis(symbol, interval = '1d', opts = {}) {
-  const { maxRetries = 8, retryDelayMs = 4000, onSyncing } = opts
+  const { maxRetries = 6, retryDelayMs = 3000, onSyncing } = opts
   const url = `${BASE}/${symbol}?interval=${interval}`
+  let lastSyncProgress = null
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     let res
     try {
-      res = await fetchWithTimeout(url, 15000)
+      res = await fetchWithTimeout(url, 12000) // Reduced from 15s
     } catch (err) {
       if (err.name === 'AbortError') {
         // Network timeout — wait and retry
@@ -73,14 +74,28 @@ export async function fetchCryptoAnalysis(symbol, interval = '1d', opts = {}) {
 
     if (res.status === 202) {
       const body = await res.json()
+      lastSyncProgress = body
       if (onSyncing) onSyncing(body)
+      
+      // If candles aren't increasing, data might not be available
+      if (attempt > 2 && body.candlesAvailable === 0) {
+        throw new Error(`Data not available for ${symbol} (${interval}). The exchange may not have historical data for this pair.`)
+      }
+      
       await SLEEP(retryDelayMs)
       continue
+    }
+    
+    // Handle 404 - pair doesn't exist
+    if (res.status === 404) {
+      throw new Error(`${symbol} is not a valid trading pair or is not supported.`)
     }
 
     const text = await res.text().catch(() => '')
     throw new Error(`fetchCryptoAnalysis(${symbol}): ${res.status} — ${text}`)
   }
 
-  throw new Error(`fetchCryptoAnalysis(${symbol}): timed out after ${maxRetries} retries`)
+  // Improved timeout message
+  const progress = lastSyncProgress ? ` (${lastSyncProgress.candlesAvailable}/${lastSyncProgress.candlesRequired} candles)` : ''
+  throw new Error(`Data sync timed out for ${symbol} (${interval})${progress}. Server is still collecting historical data.`)
 }
