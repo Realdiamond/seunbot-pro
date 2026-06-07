@@ -462,7 +462,7 @@ class RealNGXDataService {
       exchange: asset?.exchange || 'NSENG',
       imageUrl: asset?.imageUrl || '',
       sector: this.getDisplaySector(asset?.sector),
-      type: 'Stock',
+      type: asset?.assetType || (asset?.sector === 'ETF' ? 'ETF' : 'Stock'),
       price,
       change,
       changePercent,
