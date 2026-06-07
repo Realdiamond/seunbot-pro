@@ -122,7 +122,14 @@ export default function ForexAnalysis({ initialSymbol = 'AUDCAD' }) {
       )}
 
       {isLoading || error ? (
-        <SyncState syncing={syncing} syncProgress={syncProgress} error={error} />
+        <SyncState 
+          syncing={syncing} 
+          syncProgress={syncProgress} 
+          error={error}
+          onRetry={refetch}
+          symbol={symbol}
+          interval={interval}
+        />
       ) : analysis ? (
         <div className="space-y-6">
           <ScoreCards analysis={analysis} />

@@ -21,7 +21,7 @@ const NGXWeeklySetupsPanel = () => {
   const [watchlist, setWatchlist] = useState([])
 
   const sectors = ['All', 'Banking', 'Oil & Gas', 'Consumer Goods', 'Telecommunications', 'Industrial Goods', 'Insurance', 'ICT', 'Healthcare', 'Financial Services']
-  const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
+  const setupTypes = ['All', 'Bullish Setup', 'Bullish Breakout', 'Oversold Bounce', 'Consolidation Breakout', 'Bearish Setup', 'Bearish Breakdown', 'Overbought Reversal', 'Consolidation']
 
   useEffect(() => {
     loadWeeklySetups()
@@ -214,19 +214,27 @@ const NGXWeeklySetupsPanel = () => {
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
             <TrendingUp className="h-4 w-4 text-blue-400" />
-            <span className="text-blue-400 font-medium text-sm">Success Rate</span>
+            <span className="text-blue-400 font-medium text-sm">Avg Probability</span>
           </div>
-          <div className="text-white text-xl font-bold">78%</div>
-          <div className="text-xs text-gray-400">Historical Performance</div>
+          <div className="text-white text-xl font-bold">
+            {weeklySetups?.setups?.length > 0 
+              ? Math.round(weeklySetups.setups.reduce((sum, s) => sum + (s.probability || 0), 0) / weeklySetups.setups.length)
+              : 0}%
+          </div>
+          <div className="text-xs text-gray-400">Across All Setups</div>
         </div>
 
         <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
             <Percent className="h-4 w-4 text-purple-400" />
-            <span className="text-purple-400 font-medium text-sm">Avg Return</span>
+            <span className="text-purple-400 font-medium text-sm">Avg R:R Ratio</span>
           </div>
-          <div className="text-white text-xl font-bold">12.5%</div>
-          <div className="text-xs text-gray-400">Per Setup</div>
+          <div className="text-white text-xl font-bold">
+            {weeklySetups?.setups?.length > 0 
+              ? (weeklySetups.setups.reduce((sum, s) => sum + (parseFloat(s.riskReward) || 0), 0) / weeklySetups.setups.length).toFixed(1)
+              : '0.0'}
+          </div>
+          <div className="text-xs text-gray-400">Risk/Reward</div>
         </div>
       </div>
 
@@ -375,7 +383,7 @@ const NGXWeeklySetupsPanel = () => {
                           <span className="text-green-400 font-medium">₦{setup.targetPrice.toFixed(2)}</span>
                         </div>
                         <div className="text-xs text-gray-400">
-                          +{(((setup.targetPrice - setup.currentPrice) / setup.currentPrice) * 100).toFixed(1)}%
+                          +{setup.currentPrice > 0 ? (((setup.targetPrice - setup.currentPrice) / setup.currentPrice) * 100).toFixed(1) : '0.0'}%
                         </div>
                       </td>
                       
@@ -385,7 +393,7 @@ const NGXWeeklySetupsPanel = () => {
                           <span className="text-red-400 font-medium">₦{setup.stopLoss.toFixed(2)}</span>
                         </div>
                         <div className="text-xs text-gray-400">
-                          {(((setup.stopLoss - setup.currentPrice) / setup.currentPrice) * 100).toFixed(1)}%
+                          {setup.currentPrice > 0 ? (((setup.stopLoss - setup.currentPrice) / setup.currentPrice) * 100).toFixed(1) : '0.0'}%
                         </div>
                       </td>
                       

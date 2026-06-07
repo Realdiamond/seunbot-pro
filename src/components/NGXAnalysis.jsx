@@ -227,7 +227,7 @@ const NGXAnalysis = ({ selectedStock, marketData }) => {
               <h4 className="text-sm font-medium text-gray-400 mb-2">Volatility</h4>
               <div className="bg-gray-700/30 rounded-lg p-4">
                 <p className="text-white">
-                  Daily range: ₦{(stockData.high - stockData.low).toFixed(2)} ({((stockData.high - stockData.low) / stockData.low * 100).toFixed(2)}%).
+                  Daily range: ₦{(stockData.high - stockData.low).toFixed(2)} ({stockData.low > 0 ? ((stockData.high - stockData.low) / stockData.low * 100).toFixed(2) : '0.00'}%).
                   {Math.abs(stockData.changePercent) > 5 ? ' High volatility - exercise caution.' : ' Moderate volatility levels.'}
                 </p>
               </div>

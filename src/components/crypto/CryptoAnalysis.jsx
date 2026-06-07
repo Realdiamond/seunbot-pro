@@ -103,7 +103,14 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
 
       {/* Loading / syncing / error */}
       {isLoading || error ? (
-        <SyncState syncing={syncing} syncProgress={syncProgress} error={error} />
+        <SyncState 
+          syncing={syncing} 
+          syncProgress={syncProgress} 
+          error={error} 
+          onRetry={refetch}
+          symbol={symbol}
+          interval={interval}
+        />
       ) : analysis ? (
         <div className="space-y-6">
           {/* 1 — Signal + score breakdown */}

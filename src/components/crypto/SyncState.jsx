@@ -1,15 +1,50 @@
 import React from 'react'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle, RefreshCw, Clock, Database } from 'lucide-react'
 
-export default function SyncState({ syncing, syncProgress, error }) {
+export default function SyncState({ syncing, syncProgress, error, onRetry, symbol, interval }) {
   if (error) {
+    // Parse error to show user-friendly message
+    const isTimeout = error.includes('timed out') || error.includes('timeout')
+    const isNetworkError = error.includes('network') || error.includes('fetch')
+    const isDataUnavailable = error.includes('syncing') || error.includes('candles')
+    
+    let title = 'Analysis Failed'
+    let message = error
+    let suggestion = 'Please try again later'
+    
+    if (isTimeout) {
+      title = 'Data Sync Timeout'
+      message = `Historical data for ${symbol || 'this pair'} (${interval || '1d'}) is taking longer than expected to load.`
+      suggestion = 'The server may be fetching data from exchange. Try again in a moment or select a different pair.'
+    } else if (isNetworkError) {
+      title = 'Network Error'
+      message = 'Unable to connect to the analysis server.'
+      suggestion = 'Check your internet connection and try again.'
+    } else if (isDataUnavailable) {
+      title = 'Data Not Available'
+      message = `Insufficient historical data for ${symbol || 'this pair'} on ${interval || '1d'} timeframe.`
+      suggestion = 'Try a different timeframe or select a more actively traded pair.'
+    }
+    
     return (
-      <div className="flex items-start gap-3 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400">
-        <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-        <div>
-          <div className="font-semibold mb-1">Analysis Failed</div>
-          <div className="text-sm opacity-80">{error}</div>
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <div className="flex items-start gap-3 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 max-w-lg">
+          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="font-semibold mb-1">{title}</div>
+            <div className="text-sm opacity-80 mb-2">{message}</div>
+            <div className="text-xs text-gray-400">{suggestion}</div>
+          </div>
         </div>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 rounded-xl text-blue-400 text-sm font-medium transition-all"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
+        )}
       </div>
     )
   }
