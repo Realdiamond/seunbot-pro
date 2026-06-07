@@ -5,21 +5,25 @@ import axios from 'axios';
 class RealNGXDataService {
   constructor() {
     this.assetsApiBaseUrl = import.meta.env.VITE_SEUNBOT_API_BASE_URL || '';
+    // Increased cache TTLs to reduce API calls
     this.assetsCache = {
       data: null,
       timestamp: 0,
-      ttl: 2 * 60 * 1000
+      ttl: 5 * 60 * 1000  // 5 minutes (assets rarely change)
     };
     this.livePricesCache = {
       data: null,
       timestamp: 0,
-      ttl: 60 * 1000
+      ttl: 60 * 1000  // 1 minute for live prices
     };
     this.predictionCache = new Map();
     this.verifyCache = new Map();
-    this.predictionCacheTTL = 2 * 60 * 1000;
-    this.verifyCacheTTL = 2 * 60 * 1000;
-    this.predictionBatchSize = 8;
+    this.predictionCacheTTL = 5 * 60 * 1000;  // 5 minutes
+    this.verifyCacheTTL = 5 * 60 * 1000;      // 5 minutes
+    // Request deduplication: track in-flight requests to prevent duplicate API calls
+    this._inflightAssets = null;
+    this._inflightLivePrices = null;
+    this._inflightBatchPrediction = null;
   }
 
   normalizeAssetSymbol(symbol = '') {
@@ -84,17 +88,24 @@ class RealNGXDataService {
       return this.assetsCache.data;
     }
 
-    const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets`, {
-      params: {
-        pageSize: 1000 // Fetch all assets since the endpoint is paginated (default 50)
-      },
-      timeout: 15000
-    });
+    // Request deduplication: if a fetch is already in-flight, wait for it
+    if (this._inflightAssets) {
+      return this._inflightAssets;
+    }
+
+    this._inflightAssets = (async () => {
+      try {
+        const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets`, {
+          params: {
+            pageSize: 1000 // Fetch all assets since the endpoint is paginated (default 50)
+          },
+          timeout: 15000
+        });
 
     // Handle both { data: [...] } and direct [...] arrays just in case, plus parse string if backend sends bad Content-Type
     let payload = response.data;
     if (typeof payload === 'string') {
-      try { payload = JSON.parse(payload); } catch(e) {}
+      try { payload = JSON.parse(payload); } catch { /* ignore parse errors, keep original */ }
     }
     const raw = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
 
@@ -121,8 +132,14 @@ class RealNGXDataService {
     }
     const assets = Array.from(seen.values());
 
-    this.assetsCache = { data: assets, timestamp: now, ttl: this.assetsCache.ttl };
-    return assets;
+        this.assetsCache = { data: assets, timestamp: Date.now(), ttl: this.assetsCache.ttl };
+        return assets;
+      } finally {
+        this._inflightAssets = null;
+      }
+    })();
+
+    return this._inflightAssets;
   }
 
 
@@ -173,10 +190,16 @@ class RealNGXDataService {
       return this.livePricesCache.data;
     }
 
-    try {
-      const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets/live-prices`, {
-        timeout: 15000
-      });
+    // Request deduplication: if a fetch is already in-flight, wait for it
+    if (this._inflightLivePrices) {
+      return this._inflightLivePrices;
+    }
+
+    this._inflightLivePrices = (async () => {
+      try {
+        const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets/live-prices`, {
+          timeout: 15000
+        });
 
       const payload = response.data || {};
       const rows = this.extractLivePricesArray(payload);
@@ -194,30 +217,35 @@ class RealNGXDataService {
         lastRefreshed: payload?.lastRefreshed || null
       };
 
-      this.livePricesCache = {
-        data,
-        timestamp: now,
-        ttl: this.livePricesCache.ttl
-      };
+        this.livePricesCache = {
+          data,
+          timestamp: Date.now(),
+          ttl: this.livePricesCache.ttl
+        };
 
-      return data;
-    } catch (error) {
-      console.warn('Live prices endpoint unavailable:', error?.message || error);
+        return data;
+      } catch (error) {
+        console.warn('Live prices endpoint unavailable:', error?.message || error);
 
-      const fallback = {
-        bySymbol: new Map(),
-        isDataAvailable: false,
-        lastRefreshed: null
-      };
+        const fallback = {
+          bySymbol: new Map(),
+          isDataAvailable: false,
+          lastRefreshed: null
+        };
 
-      this.livePricesCache = {
-        data: fallback,
-        timestamp: now,
-        ttl: this.livePricesCache.ttl
-      };
+        this.livePricesCache = {
+          data: fallback,
+          timestamp: Date.now(),
+          ttl: this.livePricesCache.ttl
+        };
 
-      return fallback;
-    }
+        return fallback;
+      } finally {
+        this._inflightLivePrices = null;
+      }
+    })();
+
+    return this._inflightLivePrices;
   }
 
   async fetchPredictionBySymbol(symbol) {
@@ -275,23 +303,92 @@ class RealNGXDataService {
     }
   }
 
+  /**
+   * Fetch predictions for multiple symbols using the batch endpoint.
+   * Falls back to individual requests if batch fails.
+   */
   async fetchPredictionPricesForSymbols(nsengSymbols = []) {
     const resultMap = new Map();
     const normalizedInput = nsengSymbols
       .map((symbol) => this.toNsengSymbol(symbol))
       .filter(Boolean);
 
-    for (let i = 0; i < normalizedInput.length; i += this.predictionBatchSize) {
-      const chunk = normalizedInput.slice(i, i + this.predictionBatchSize);
-      const chunkResults = await Promise.all(
-        chunk.map((symbol) => this.fetchPredictionBySymbol(symbol))
-      );
+    if (normalizedInput.length === 0) return resultMap;
 
-      chunk.forEach((symbol, idx) => {
-        if (chunkResults[idx]) {
-          resultMap.set(symbol, chunkResults[idx]);
-        }
+    // Check cache first and collect uncached symbols
+    const uncachedSymbols = [];
+    for (const symbol of normalizedInput) {
+      const cached = this.getCached(this.predictionCache, symbol, this.predictionCacheTTL);
+      if (cached) {
+        resultMap.set(symbol, cached);
+      } else {
+        uncachedSymbols.push(symbol);
+      }
+    }
+
+    if (uncachedSymbols.length === 0) return resultMap;
+
+    // Use lightweight bulk-prices endpoint first (much faster than full prediction batch)
+    try {
+      // Strip NSENG_ prefix for API call
+      const bareSymbols = uncachedSymbols.map(s => s.replace(/^NSENG_/i, ''));
+      const response = await axios.get(`${this.assetsApiBaseUrl}/api/Prediction/bulk-prices`, {
+        params: { symbols: bareSymbols.join(',') },
+        timeout: 15000
       });
+
+      const prices = Array.isArray(response.data) ? response.data : [];
+      for (const priceData of prices) {
+        if (!priceData || !priceData.symbol || !priceData.isSuccess) continue;
+        const nsengSymbol = this.toNsengSymbol(priceData.symbol);
+        const prediction = {
+          symbol: nsengSymbol,
+          currentPrice: this.pickNumber(priceData, ['currentPrice', 'price']),
+          high: this.pickNumber(priceData, ['high']),
+          low: this.pickNumber(priceData, ['low']),
+          volume: this.pickNumber(priceData, ['volume']),
+          analyzedAt: priceData.timestamp || null
+        };
+        this.setCached(this.predictionCache, nsengSymbol, prediction);
+        resultMap.set(nsengSymbol, prediction);
+      }
+      console.log(`✅ Bulk prices fetched ${prices.filter(p => p?.isSuccess).length} results for ${uncachedSymbols.length} symbols`);
+    } catch (error) {
+      console.warn('Bulk prices endpoint failed, trying prediction batch:', error?.message);
+      // Fallback: try the full prediction batch endpoint
+      try {
+        const bareSymbols = uncachedSymbols.map(s => s.replace(/^NSENG_/i, ''));
+        const response = await axios.get(`${this.assetsApiBaseUrl}/api/Prediction/batch`, {
+          params: { symbols: bareSymbols.join(',') },
+          timeout: 30000
+        });
+
+        const predictions = Array.isArray(response.data) ? response.data : [];
+        for (const pred of predictions) {
+          if (!pred || !pred.symbol) continue;
+          const nsengSymbol = this.toNsengSymbol(pred.symbol);
+          const prediction = {
+            symbol: nsengSymbol,
+            currentPrice: this.pickNumber(pred, ['currentPrice', 'price', 'lastPrice']),
+            analyzedAt: pred.analyzedAt || null
+          };
+          this.setCached(this.predictionCache, nsengSymbol, prediction);
+          resultMap.set(nsengSymbol, prediction);
+        }
+        console.log(`✅ Batch prediction fetched ${predictions.length} results`);
+      } catch (batchError) {
+        console.warn('Batch prediction also failed, using parallel individual requests:', batchError?.message);
+        // Final fallback: parallel individual requests
+        const fallbackResults = await Promise.allSettled(
+          uncachedSymbols.map((symbol) => this.fetchPredictionBySymbol(symbol))
+        );
+        uncachedSymbols.forEach((symbol, idx) => {
+          const result = fallbackResults[idx];
+          if (result.status === 'fulfilled' && result.value) {
+            resultMap.set(symbol, result.value);
+          }
+        });
+      }
     }
 
     return resultMap;
@@ -509,7 +606,7 @@ class RealNGXDataService {
 
 
 
-  // Clear cache
+  // Clear cache and reset inflight requests
   clearCache() {
     this.assetsCache.data = null;
     this.assetsCache.timestamp = 0;
@@ -517,6 +614,10 @@ class RealNGXDataService {
     this.livePricesCache.timestamp = 0;
     this.predictionCache.clear();
     this.verifyCache.clear();
+    // Reset inflight requests
+    this._inflightAssets = null;
+    this._inflightLivePrices = null;
+    this._inflightBatchPrediction = null;
   }
 
   // ── GET /health ──────────────────────────────────────────────────────────────
