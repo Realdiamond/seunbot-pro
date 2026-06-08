@@ -11,7 +11,7 @@ import { fmtVol, formatPair, fmt, fmtPrice } from './utils'
 
 export default function ForexDashboard({ onSelectPair }) {
   const [page, setPage] = useState(1)
-  const [pageSize] = useState(20)
+  const [pageSize] = useState(100)
 
   const { pairs, metadata, loading, error, lastUpdate, refetch } = useForexPairs(page, pageSize)
 

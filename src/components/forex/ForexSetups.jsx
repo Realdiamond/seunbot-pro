@@ -5,7 +5,7 @@ import { useForexPairs } from '../../hooks/useForexPairs'
 import ForexPairTable from './ForexPairTable'
 
 export default function ForexSetups() {
-  const { pairs, metadata, loading, error, refetch } = useForexPairs()
+  const { pairs, metadata, loading, error, refetch } = useForexPairs(1, 100)
   const [directionFilter, setDirectionFilter] = useState('All')
   const [selected, setSelected] = useState(null)
   const navigate = useNavigate()

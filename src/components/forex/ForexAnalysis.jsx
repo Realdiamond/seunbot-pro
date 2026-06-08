@@ -29,7 +29,7 @@ export default function ForexAnalysis({ initialSymbol = 'AUDCAD' }) {
     if (routeSymbol) setSymbol(routeSymbol)
   }, [routeSymbol])
 
-  const { pairs } = useForexPairs()
+  const { pairs } = useForexPairs(1, 100)
   const { analysis, loading, syncing, syncProgress, error, refetch } = useForexAnalysis(symbol, interval)
 
   const isLoading = loading || syncing
