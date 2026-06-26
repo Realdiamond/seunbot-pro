@@ -1,0 +1,14 @@
+streamlit
+pandas
+numpy
+plotly
+requests
+yfinance
+scipy
+scikit-learn
+matplotlib
+seaborn
+python-binance
+beautifulsoup4
+lxml
+tqdm

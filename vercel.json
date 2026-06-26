@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://seun-trading-bot-production.up.railway.app/api/:match*"
+    },
+    {
+      "source": "/udf/:match*",
+      "destination": "https://seun-trading-bot-production.up.railway.app/udf/:match*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://seun-trading-bot-production.up.railway.app/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
