@@ -127,13 +127,18 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
     return () => usStocksWebSocket.unsubscribe(selectedStock, handleWsUpdate)
   }, [selectedStock, handleWsUpdate])
 
-  // Load price data from props or service
+  // Load price data from props or service.
+  // Only trust the passed stockData when it actually carries a positive price. Navigating in from
+  // the weekly-setups "Analyze" button passes a stub with price:0 (the symbol isn't in the
+  // dashboard's loaded page yet), which previously rendered a hard "$0.00". In that case we still
+  // fetch fresh so a real price resolves; the prediction effect below also backfills currentPrice.
   useEffect(() => {
-    if (stockData) {
+    if (stockData && Number(stockData.price) > 0) {
       setPriceData(stockData)
-    } else {
+    } else if (selectedStock) {
+      setPriceData(stockData || null) // keep name/sector for the header while the price loads
       USStocksDataService.fetchStockData(selectedStock)
-        .then(d => setPriceData(d))
+        .then(d => { if (d && Number(d.price) > 0) setPriceData(prev => ({ ...(prev || {}), ...d })) })
         .catch(() => {})
     }
   }, [selectedStock, stockData])
@@ -169,6 +174,14 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
         }
 
         setPrediction(result)
+        // Backfill the header price from the prediction's currentPrice when we don't yet have a
+        // real price (e.g. arrived via a setups stub and fetchStockData had nothing). The backend
+        // now returns a real currentPrice for US symbols, so this reliably clears the "$0.00".
+        if (Number(result?.currentPrice) > 0) {
+          setPriceData(prev => (prev && Number(prev.price) > 0)
+            ? prev
+            : { ...(prev || {}), price: Number(result.currentPrice) })
+        }
         setVerification(verifyRes)
         setSentiment(sentimentRes)
         setHistory(historyRes || [])
@@ -208,6 +221,14 @@ const USStocksAdvancedAnalysis = ({ selectedStock = '', stockData = null, stocks
           return
         }
         setPrediction(result)
+        // Backfill the header price from the prediction's currentPrice when we don't yet have a
+        // real price (e.g. arrived via a setups stub and fetchStockData had nothing). The backend
+        // now returns a real currentPrice for US symbols, so this reliably clears the "$0.00".
+        if (Number(result?.currentPrice) > 0) {
+          setPriceData(prev => (prev && Number(prev.price) > 0)
+            ? prev
+            : { ...(prev || {}), price: Number(result.currentPrice) })
+        }
         setVerification(verifyRes)
         setSentiment(sentimentRes)
         setHistory(historyRes || [])
