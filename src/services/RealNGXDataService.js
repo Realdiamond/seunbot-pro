@@ -171,8 +171,9 @@ class RealNGXDataService {
       rawSymbol: this.toNsengSymbol(symbol),
       price: this.pickNumber(record, ['price', 'currentPrice', 'lastPrice', 'livePrice', 'latestPrice']),
       change: this.pickNumber(record, ['change', 'priceChange', 'dailyChange']),
-      changePercent: this.pickNumber(record, ['changePercent', 'priceChangePercent', 'dailyChangePercent', 'percentChange']),
-      volume: this.pickNumber(record, ['volume', 'totalVolume', 'latestVolume', 'tradeVolume']),
+      changePercent: this.pickNumber(record, ['changePercent', 'change24hPct', 'priceChangePercent', 'dailyChangePercent', 'percentChange']),
+      volume: this.pickNumber(record, ['volume', 'volume24h', 'totalVolume', 'latestVolume', 'tradeVolume']),
+      open: this.pickNumber(record, ['open', 'openPrice', 'dayOpen']),
       high: this.pickNumber(record, ['high', 'dayHigh', 'latestHigh']),
       low: this.pickNumber(record, ['low', 'dayLow', 'latestLow']),
       previousClose: this.pickNumber(record, ['previousClose', 'prevClose', 'latestClose']),
@@ -469,7 +470,9 @@ class RealNGXDataService {
       volume,
       high,
       low,
-      open: null,
+      // Real session open from the live feed (ngnmarket.com now supplies it); falls back to
+      // previousClose so the card shows a sensible value instead of a bare "-".
+      open: this.firstNumber([this.toNumber(livePrice?.open, null), previousClose], null),
       previousClose,
       timestamp,
       staleDays: this.toNumber(verify?.daysSinceLastUpdate, null),
@@ -521,33 +524,68 @@ class RealNGXDataService {
     }
   }
 
+  /**
+   * Whole-market NGX snapshot (All-Share Index, market volume, value traded, market cap,
+   * breadth, top gainers/losers) from the backend, which scrapes it live from ngnmarket.com.
+   * Returns null if the endpoint is unavailable so callers can fall back gracefully.
+   */
+  async fetchNgxMarketSnapshot() {
+    try {
+      const response = await axios.get(`${this.assetsApiBaseUrl}/api/Assets/ngx-market-snapshot`, {
+        timeout: 15000
+      });
+      return response.data?.data || null;
+    } catch (error) {
+      console.warn('NGX market snapshot unavailable:', error?.message);
+      return null;
+    }
+  }
+
   // Fetch NGX market summary
   async fetchMarketSummary() {
     try {
-      const [assets, livePrices] = await Promise.all([
+      const [assets, livePrices, snapshot] = await Promise.all([
         this.fetchAssets(),
-        this.fetchLivePrices()
+        this.fetchLivePrices(),
+        this.fetchNgxMarketSnapshot()
       ]);
 
       const totalStocks = assets.length;
       const priceRows = Array.from(livePrices.bySymbol.values());
-      const totalVolume = priceRows.reduce((sum, row) => sum + this.firstNumber([row.volume], 0), 0);
+      const rowVolume = priceRows.reduce((sum, row) => sum + this.firstNumber([row.volume], 0), 0);
 
-      const advancers = priceRows.filter((row) => this.toNumber(row.changePercent, 0) > 0).length;
-      const decliners = priceRows.filter((row) => this.toNumber(row.changePercent, 0) < 0).length;
+      const rowAdvancers = priceRows.filter((row) => this.toNumber(row.changePercent, 0) > 0).length;
+      const rowDecliners = priceRows.filter((row) => this.toNumber(row.changePercent, 0) < 0).length;
+
+      // Prefer the authoritative whole-market snapshot (ASI, market-wide volume/breadth) when
+      // available; otherwise derive breadth/volume from the per-stock live-price rows we have.
+      const index = this.toNumber(snapshot?.index, 0) || null;
+      const indexChangePercent = this.toNumber(snapshot?.indexChangePercent, 0);
+      const totalMarketCap = this.toNumber(snapshot?.totalMarketCap, 0);
+      const totalVolume = this.toNumber(snapshot?.totalVolume, 0) || rowVolume;
+      const advancers = snapshot?.advancers != null ? this.toNumber(snapshot.advancers, 0) : rowAdvancers;
+      const decliners = snapshot?.decliners != null ? this.toNumber(snapshot.decliners, 0) : rowDecliners;
       const unchanged = Math.max(totalStocks - advancers - decliners, 0);
 
+      const sources = ['Assets API'];
+      if (livePrices.isDataAvailable) sources.push('Assets Live Prices');
+      if (snapshot) sources.push('NGX Market Snapshot');
+
       return {
-        index: null,
-        indexChange: 0,
-        indexChangePercent: 0,
-        totalMarketCap: 0,
+        index,
+        indexChange: index != null ? (index * indexChangePercent) / 100 : 0,
+        indexChangePercent,
+        totalMarketCap,
         totalVolume,
+        valueTraded: this.toNumber(snapshot?.valueTraded, 0),
+        deals: this.toNumber(snapshot?.deals, 0),
         advancers,
         decliners,
         unchanged,
+        topGainers: snapshot?.topGainers || [],
+        topLosers: snapshot?.topLosers || [],
         timestamp: new Date().toISOString(),
-        sources: livePrices.isDataAvailable ? ['Assets API', 'Assets Live Prices'] : ['Assets API'],
+        sources,
         totalStocks,
         isMock: false
       };

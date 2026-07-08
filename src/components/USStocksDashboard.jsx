@@ -41,7 +41,13 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
   const [selectedSector, setSelectedSector] = useState('All');
   const [sortBy, setSortBy] = useState('changePercent');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [selectedStock, setSelectedStock] = useState(initialSymbol || null);
+  // Always hold selectedStock as an object. initialSymbol arrives as a bare string from the
+  // /usstocks/:symbol route; storing the raw string left selectedStock?.symbol === undefined
+  // (a string has no .symbol), so the detail page rendered nothing/"$0.00". Seed a minimal object
+  // and let the resolve effect below fill it from the loaded stock list.
+  const [selectedStock, setSelectedStock] = useState(
+    initialSymbol ? { symbol: initialSymbol, name: initialSymbol, sector: 'US', price: null, changePercent: null } : null
+  );
   const [showAnalysis, setShowAnalysis] = useState(!!initialSymbol);
 
   const location = useLocation();
@@ -123,9 +129,16 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
       setStocks(stocksData);
       setMarketSummary(summary);
 
-      // Pre-select the first stock so the analysis tab has a default selection
-      if (stocksData && stocksData.length > 0 && !selectedStock) {
-        setSelectedStock(stocksData[0]);
+      // Resolve the selection to a full stock object once the list loads:
+      //  - nothing selected yet → default to the first stock
+      //  - selected by symbol only (from a route/stub, no real price) → swap in the full object
+      if (stocksData && stocksData.length > 0) {
+        if (!selectedStock) {
+          setSelectedStock(stocksData[0]);
+        } else if (selectedStock.symbol && !(Number(selectedStock.price) > 0)) {
+          const full = stocksData.find(s => s.symbol === selectedStock.symbol);
+          if (full) setSelectedStock(full);
+        }
       }
 
       // Initialize watchlist: saved selection wins; otherwise merge the
@@ -829,7 +842,10 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
           <USStocksWeeklySetupsPanel
             onAnalyze={(symbol) => {
               const found = stocks.find(s => s.symbol === symbol);
-              setSelectedStock(found || { symbol, name: symbol, sector: 'US', price: 0, change: 0, changePercent: 0, volume: 0 });
+              // Use null (not 0) for unknown prices so the detail header shows "—" while the real
+              // price loads, instead of a misleading "$0.00". The detail component fetches the
+              // symbol's live price + prediction and backfills from there.
+              setSelectedStock(found || { symbol, name: symbol, sector: 'US', price: null, change: null, changePercent: null, volume: null });
               navigate('/usstocks-analysis');
             }}
           />

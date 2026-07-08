@@ -19,6 +19,37 @@ const USStocksDashboard = lazy(() => import('./components/USStocksDashboard'))
 const USStocksAdvancedAnalysis = lazy(() => import('./components/USStocksAdvancedAnalysis'))
 const USStocksWeeklySetupsPanel = lazy(() => import('./components/USStocksWeeklySetupsPanel'))
 
+// Computes real trading-session status per market from the current UTC time, replacing the
+// hard-coded "NGX Closed / everything else Open" sidebar label. Times are approximate session
+// windows (DST not modelled): NGX 10:00–14:30 WAT (09:00–13:30 UTC) Mon–Fri; US cash 09:30–16:00
+// ET (~14:30–21:00 UTC) Mon–Fri; Forex ~24/5 (Sun 21:00 → Fri 21:00 UTC); Crypto 24/7.
+function computeMarketStatus(market, now = new Date()) {
+  const day = now.getUTCDay() // 0 Sun … 6 Sat
+  const minutes = now.getUTCHours() * 60 + now.getUTCMinutes()
+  const isWeekday = day >= 1 && day <= 5
+
+  switch (market) {
+    case 'crypto':
+      return { open: true, label: 'Crypto Markets Open' }
+    case 'forex': {
+      // Continuous from Sunday 21:00 UTC to Friday 21:00 UTC
+      const open = (day >= 1 && day <= 4) ||
+        (day === 0 && minutes >= 21 * 60) ||
+        (day === 5 && minutes < 21 * 60)
+      return { open, label: open ? 'Forex Markets Open' : 'Forex Markets Closed' }
+    }
+    case 'usstocks': {
+      const open = isWeekday && minutes >= 14 * 60 + 30 && minutes < 21 * 60
+      return { open, label: open ? 'US Markets Open' : 'US Markets Closed' }
+    }
+    case 'ngx':
+    default: {
+      const open = isWeekday && minutes >= 9 * 60 && minutes <= 13 * 60 + 30
+      return { open, label: open ? 'NGX Open' : 'NGX Closed' }
+    }
+  }
+}
+
 // Wrapper component for NGX symbol-based analysis route
 function NGXSymbolAnalysis({ onSelectPair }) {
   const { symbol } = useParams()
@@ -322,27 +353,15 @@ function App() {
             {/* Market Status */}
             <div className="p-4 border-t border-gray-700">
               <div className="text-xs text-gray-400 mb-2">Market Status</div>
-              {activeMarket === 'crypto' && hasCrypto ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-green-400 text-sm">Crypto Markets Open</span>
-                </div>
-              ) : activeMarket === 'forex' && hasForex ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-green-400 text-sm">Forex Markets Open</span>
-                </div>
-              ) : activeMarket === 'usstocks' && hasUsStocks ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-green-400 text-sm">US Markets Open</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-orange-400 text-sm">NGX Closed</span>
-                </div>
-              )}
+              {(() => {
+                const status = computeMarketStatus(activeMarket)
+                return (
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${status.open ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`}></div>
+                    <span className={`text-sm ${status.open ? 'text-green-400' : 'text-orange-400'}`}>{status.label}</span>
+                  </div>
+                )
+              })()}
               <div className="text-xs text-gray-500 mt-1">
                 {new Date().toLocaleString()}
               </div>
