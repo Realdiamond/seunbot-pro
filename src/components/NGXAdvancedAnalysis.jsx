@@ -48,8 +48,14 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
   }, [selectedStock, handleWsUpdate])
 
   useEffect(() => {
+    let isCancelled = false
+
     if (selectedStock) {
-      generateNGXAdvancedAnalysis()
+      generateNGXAdvancedAnalysis(isCancelled)
+    }
+
+    return () => {
+      isCancelled = true
     }
   }, [selectedStock, selectedTimeframe])
 
@@ -83,7 +89,7 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
     }
   }
 
-  const generateNGXAdvancedAnalysis = async () => {
+  const generateNGXAdvancedAnalysis = async (isCancelled) => {
     setLoading(true)
     
     try {
@@ -94,10 +100,18 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
 
       // Fetch AI data and comprehensive report in parallel
       const [aiData, comprehensiveReport] = await Promise.all([
-        AIAnalysisEndpointService.analyzeStock({ symbol: selectedStock, price: stockData.price }).catch(() => null),
-        AIAnalysisEndpointService.fetchComprehensiveReport(nsengSymbol, assetName).catch(() => null)
+        AIAnalysisEndpointService.analyzeStock({ symbol: selectedStock, price: stockData.price }).catch(e => {
+            console.error('AI Analysis Error:', e)
+            return null
+        }),
+        AIAnalysisEndpointService.fetchComprehensiveReport(nsengSymbol, assetName).catch(e => {
+            console.error('Comprehensive Report Error:', e)
+            return null
+        })
       ])
       
+      if (isCancelled) return;
+
       const comprehensiveAnalysis = {
         smartMoney: generateNGXSmartMoneyAnalysis(stockData, aiData),
         patterns: comprehensiveReport?.patterns || null,
@@ -114,7 +128,7 @@ const NGXAdvancedAnalysis = ({ selectedStock = 'GTCO', marketData = [] }) => {
     } catch (error) {
       console.error('Error generating analysis:', error)
     } finally {
-      setLoading(false)
+      if (!isCancelled) setLoading(false)
     }
   }
 

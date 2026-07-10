@@ -885,7 +885,14 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                   </thead>
                   <tbody className="divide-y divide-gray-700">
                     {etfRows.map(etf => (
-                      <tr key={etf.symbol} className="hover:bg-gray-700/50 transition-colors cursor-pointer" onClick={() => handleStockClick(etf)}>
+                      <tr 
+                        key={etf.symbol} 
+                        className="hover:bg-gray-700/50 transition-colors cursor-pointer" 
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleStockClick(etf)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleStockClick(etf)}
+                      >
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-white">{etf.symbol}</span>

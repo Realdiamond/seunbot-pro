@@ -7,7 +7,10 @@ function SortTh({ col, label, sortBy, sortDir, onSort, align = 'right' }) {
   const active = sortBy === col
   return (
     <th
+      role="button"
+      tabIndex={0}
       onClick={() => onSort(col)}
+      onKeyDown={(e) => e.key === 'Enter' && onSort(col)}
       className={`py-3 text-${align} text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:text-white transition-colors pr-4`}
     >
       {label}
@@ -22,7 +25,10 @@ const PairRow = memo(function PairRow({ item, rank, selected, onSelect }) {
   const up  = pct >= 0
   return (
     <tr
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(coinSymbol(item.symbol))}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect(coinSymbol(item.symbol))}
       className={`group cursor-pointer transition-colors hover:bg-white/5 ${selected ? 'bg-blue-500/10' : ''}`}
     >
       <td className="py-3 pl-4 pr-2 text-gray-500 text-sm">{rank}</td>
