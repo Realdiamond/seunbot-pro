@@ -1,35 +1,49 @@
 import React from 'react'
-import { Loader2, AlertCircle, RefreshCw, Clock, Database } from 'lucide-react'
+import { Loader2, AlertCircle, RefreshCw, WifiOff, Database } from 'lucide-react'
 
-export default function SyncState({ syncing, syncProgress, error, onRetry, symbol, interval }) {
+/**
+ * SyncState — shows a loading spinner or a clear error.
+ * The "syncing" / progress-bar state has been removed because the backend
+ * now either succeeds immediately or returns a clean error. No more polling.
+ */
+export default function SyncState({ loading, error, onRetry, symbol, interval }) {
   if (error) {
-    // Parse error to show user-friendly message
-    const isTimeout = error.includes('timed out') || error.includes('timeout')
-    const isNetworkError = error.includes('network') || error.includes('fetch')
-    const isDataUnavailable = error.includes('syncing') || error.includes('candles')
-    
-    let title = 'Analysis Failed'
-    let message = error
-    let suggestion = 'Please try again later'
-    
+    const isTimeout    = error.includes('timed out') || error.includes('timeout')
+    const isNetwork    = error.includes('network') || error.includes('fetch')
+    const isNoData     = error.includes('Insufficient') || error.includes('candles') || error.includes('insufficient_data')
+    const isNotFound   = error.includes('not a valid') || error.includes('not supported')
+
+    let Icon       = AlertCircle
+    let title      = 'Analysis Failed'
+    let message    = error
+    let suggestion = 'Please try again.'
+
     if (isTimeout) {
-      title = 'Data Sync Timeout'
-      message = `Historical data for ${symbol || 'this pair'} (${interval || '1d'}) is taking longer than expected to load.`
-      suggestion = 'The server may be fetching data from exchange. Try again in a moment or select a different pair.'
-    } else if (isNetworkError) {
-      title = 'Network Error'
-      message = 'Unable to connect to the analysis server.'
+      Icon       = WifiOff
+      title      = 'Request Timed Out'
+      message    = `The server took too long to respond for ${symbol || 'this pair'} (${interval || '1d'}).`
+      suggestion = 'Try again in a moment. If it persists, select a more actively-traded pair.'
+    } else if (isNetwork) {
+      Icon       = WifiOff
+      title      = 'Network Error'
+      message    = 'Unable to reach the analysis server.'
       suggestion = 'Check your internet connection and try again.'
-    } else if (isDataUnavailable) {
-      title = 'Data Not Available'
-      message = `Insufficient historical data for ${symbol || 'this pair'} on ${interval || '1d'} timeframe.`
-      suggestion = 'Try a different timeframe or select a more actively traded pair.'
+    } else if (isNoData) {
+      Icon       = Database
+      title      = 'Data Not Available'
+      message    = `Not enough historical data for ${symbol || 'this pair'} on the ${interval || '1d'} timeframe.`
+      suggestion = 'Try the 1D timeframe, or select a more actively-traded pair.'
+    } else if (isNotFound) {
+      Icon       = AlertCircle
+      title      = 'Pair Not Found'
+      message    = `${symbol || 'This pair'} is not supported on the selected exchange.`
+      suggestion = 'Select a different pair from the list.'
     }
-    
+
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4">
-        <div className="flex items-start gap-3 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 max-w-lg">
-          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+        <div className="flex items-start gap-3 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 max-w-lg w-full">
+          <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
           <div>
             <div className="font-semibold mb-1">{title}</div>
             <div className="text-sm opacity-80 mb-2">{message}</div>
@@ -39,7 +53,7 @@ export default function SyncState({ syncing, syncProgress, error, onRetry, symbo
         {onRetry && (
           <button
             onClick={onRetry}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 rounded-xl text-blue-400 text-sm font-medium transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 rounded-xl text-purple-400 text-sm font-medium transition-all"
           >
             <RefreshCw className="w-4 h-4" />
             Try Again
@@ -49,46 +63,11 @@ export default function SyncState({ syncing, syncProgress, error, onRetry, symbo
     )
   }
 
-  if (syncing && syncProgress) {
-    const { candlesAvailable, candlesRequired, message } = syncProgress
-    const pct = candlesRequired > 0
-      ? Math.min(100, Math.round((candlesAvailable / candlesRequired) * 100))
-      : 0
-
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-5 text-center">
-        <div className="relative">
-          <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
-          <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-blue-300">
-            {pct}%
-          </div>
-        </div>
-        <div>
-          <div className="text-white font-semibold text-lg mb-1">⏳ Syncing Live Data…</div>
-          <div className="text-gray-400 text-sm max-w-sm">{message}</div>
-        </div>
-        <div className="w-64">
-          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-            <span>{candlesAvailable} candles collected</span>
-            <span>{candlesRequired} required</span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-            <div
-              className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
-        <p className="text-xs text-gray-500">Retrying every 3 seconds…</p>
-      </div>
-    )
-  }
-
-  // Generic loading
+  // Loading state
   return (
     <div className="flex items-center justify-center py-20 gap-3 text-gray-400">
-      <Loader2 className="w-6 h-6 animate-spin" />
-      <span>Loading analysis…</span>
+      <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+      <span className="text-sm">Fetching analysis…</span>
     </div>
   )
 }

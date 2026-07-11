@@ -31,10 +31,9 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
   }, [routeSymbol])
 
   const { pairs } = useCryptoPairs()
-  const { analysis, loading, syncing, syncProgress, error, refetch } = useCryptoAnalysis(symbol, interval)
+  const { analysis, loading, error, refetch } = useCryptoAnalysis(symbol, interval)
 
   const coin = coinSymbol(symbol)
-  const isLoading = loading || syncing
 
   return (
     <div className="space-y-6 fade-in">
@@ -95,7 +94,15 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
       </div>
 
       {/* Timestamp */}
-      {analysis?.analysisTimestamp && (
+      {analysis?.freshFetchedAt && (
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <Clock className="w-3.5 h-3.5" />
+          Data fetched {new Date(analysis.freshFetchedAt).toLocaleTimeString()}
+          {analysis.analysisTimestamp && ` · Analysed ${new Date(analysis.analysisTimestamp).toLocaleString()}`}
+          {analysis.typeOfAnalysis && ` · ${analysis.typeOfAnalysis}`}
+        </div>
+      )}
+      {!analysis?.freshFetchedAt && analysis?.analysisTimestamp && (
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Clock className="w-3.5 h-3.5" />
           Analysis as of {new Date(analysis.analysisTimestamp).toLocaleString()}
@@ -103,12 +110,11 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
         </div>
       )}
 
-      {/* Loading / syncing / error */}
-      {isLoading || error ? (
-        <SyncState 
-          syncing={syncing} 
-          syncProgress={syncProgress} 
-          error={error} 
+      {/* Loading / error */}
+      {(loading || error) ? (
+        <SyncState
+          loading={loading}
+          error={error}
           onRetry={refetch}
           symbol={symbol}
           interval={interval}

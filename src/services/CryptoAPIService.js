@@ -186,60 +186,44 @@ export async function fetchCryptoSetups({ page = 1, pageSize = 25, minProbabilit
 }
 
 /**
- * GET /api/CryptoAnalysis/{symbol}?interval={interval}
- * Full technical analysis. Handles syncing (202) by polling.
+ * GET /api/CryptoAnalysis/{symbol}?interval={interval}&force={force}
+ *
+ * Single-shot fetch — no polling. The backend is now guaranteed to return
+ * 200 (success) or a non-202 error (503 insufficient data, 500 server error).
  *
  * @param {string} symbol
- * @param {string} interval     - one of: 1m 5m 15m 1h 4h 1d
+ * @param {string} interval    - one of: 1m 5m 15m 1h 4h 1d 1w 1M
  * @param {object} [opts]
- * @param {number} [opts.maxRetries=6]       - max polling attempts before giving up (reduced from 8)
- * @param {number} [opts.retryDelayMs=3000]  - ms between retries (reduced from 4000)
- * @param {function} [opts.onSyncing]        - called on each 202 with sync progress body
+ * @param {boolean} [opts.force=false] - busts the server-side cache and re-fetches from exchange
  */
 export async function fetchCryptoAnalysis(symbol, interval = '1d', opts = {}) {
-  const { maxRetries = 6, retryDelayMs = 3000, onSyncing } = opts
-  const url = `${BASE}/${symbol}?interval=${interval}`
-  let lastSyncProgress = null
+  const { force = false } = opts
+  const url = `${BASE}/${symbol}?interval=${interval}${force ? '&force=true' : ''}`
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    let res
-    try {
-      res = await fetchWithTimeout(url, 12000) // Reduced from 15s
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        // Network timeout — wait and retry
-        await SLEEP(retryDelayMs)
-        continue
-      }
-      throw err
+  let res
+  try {
+    res = await fetchWithTimeout(url, 20000) // 20s hard timeout
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out for ${symbol} (${interval}). The server took too long to respond.`)
     }
-
-    if (res.status === 200) return res.json()
-
-    if (res.status === 202) {
-      const body = await res.json()
-      lastSyncProgress = body
-      if (onSyncing) onSyncing(body)
-      
-      // If candles aren't increasing, data might not be available
-      if (attempt > 2 && body.candlesAvailable === 0) {
-        throw new Error(`Data not available for ${symbol} (${interval}). The exchange may not have historical data for this pair.`)
-      }
-      
-      await SLEEP(retryDelayMs)
-      continue
-    }
-    
-    // Handle 404 - pair doesn't exist
-    if (res.status === 404) {
-      throw new Error(`${symbol} is not a valid trading pair or is not supported.`)
-    }
-
-    const text = await res.text().catch(() => '')
-    throw new Error(`fetchCryptoAnalysis(${symbol}): ${res.status} — ${text}`)
+    throw err
   }
 
-  // Improved timeout message
-  const progress = lastSyncProgress ? ` (${lastSyncProgress.candlesAvailable}/${lastSyncProgress.candlesRequired} candles)` : ''
-  throw new Error(`Data sync timed out for ${symbol} (${interval})${progress}. Server is still collecting historical data.`)
+  if (res.status === 200) return res.json()
+
+  // Parse the error body for a user-facing message.
+  let body = {}
+  try { body = await res.json() } catch { /* ignore */ }
+
+  const detail = body.message || body.detail || res.statusText
+
+  if (res.status === 503) {
+    throw new Error(`Insufficient data for ${symbol} (${interval}): ${body.message || 'Not enough historical candles available.'}`)
+  }
+  if (res.status === 404) {
+    throw new Error(`${symbol} is not a valid trading pair or is not supported.`)
+  }
+
+  throw new Error(`Analysis failed for ${symbol} (${interval}): ${res.status} — ${detail}`)
 }
