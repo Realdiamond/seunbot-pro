@@ -1,5 +1,6 @@
 import React from 'react'
 import { Target, TrendingUp, TrendingDown, AlertCircle, CheckCircle } from 'lucide-react'
+import { signalCardClass, signalTextClass } from '../utils/signalColors'
 
 const SignalPanel = ({ signals, isLoading }) => {
   if (isLoading) {
@@ -19,33 +20,10 @@ const SignalPanel = ({ signals, isLoading }) => {
   }
 
   const getSignalIcon = (signal) => {
-    switch (signal.toLowerCase()) {
-      case 'strong buy':
-        return <TrendingUp className="h-4 w-4 text-green-400" />
-      case 'buy':
-        return <TrendingUp className="h-4 w-4 text-green-300" />
-      case 'strong sell':
-        return <TrendingDown className="h-4 w-4 text-red-400" />
-      case 'sell':
-        return <TrendingDown className="h-4 w-4 text-red-300" />
-      default:
-        return <AlertCircle className="h-4 w-4 text-yellow-400" />
-    }
-  }
-
-  const getSignalColor = (signal) => {
-    switch (signal.toLowerCase()) {
-      case 'strong buy':
-        return 'border-green-500 bg-green-500/10'
-      case 'buy':
-        return 'border-green-400 bg-green-400/10'
-      case 'strong sell':
-        return 'border-red-500 bg-red-500/10'
-      case 'sell':
-        return 'border-red-400 bg-red-400/10'
-      default:
-        return 'border-yellow-400 bg-yellow-400/10'
-    }
+    const s = String(signal || '').toLowerCase()
+    if (s.includes('buy'))  return <TrendingUp className={`h-4 w-4 ${signalTextClass(signal)}`} />
+    if (s.includes('sell')) return <TrendingDown className={`h-4 w-4 ${signalTextClass(signal)}`} />
+    return <AlertCircle className="h-4 w-4 text-yellow-400" />
   }
 
   return (
@@ -57,7 +35,7 @@ const SignalPanel = ({ signals, isLoading }) => {
       
       <div className="space-y-4">
         {signals.map((signal, index) => (
-          <div key={index} className={`p-4 border rounded-lg ${getSignalColor(signal.signal)}`}>
+          <div key={index} className={`p-4 border rounded-lg ${signalCardClass(signal.signal)}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2">
                 {getSignalIcon(signal.signal)}

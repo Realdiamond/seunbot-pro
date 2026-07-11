@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { signalBadgeClass } from '../utils/signalColors';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, RefreshCw, Search, Filter, Star, Brain, Target, Zap, Wifi, WifiOff, Clock, Globe } from 'lucide-react';
 import USStocksDataService from '../services/USStocksDataService';
@@ -606,15 +607,8 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                                     {(() => {
                                       const pred = batchPredictions.get(stock.symbol);
                                       const recVal = pred.recommendation || 'HOLD';
-                                      const colors = {
-                                        BUY: 'bg-green-500/20 text-green-400 border border-green-500/30',
-                                        STRONG_BUY: 'bg-green-500 text-white font-bold border border-green-600',
-                                        SELL: 'bg-red-500/20 text-red-400 border border-red-500/30',
-                                        STRONG_SELL: 'bg-red-500 text-white font-bold border border-red-600',
-                                        HOLD: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                                      };
                                       return (
-                                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${colors[recVal] || colors.HOLD}`}>
+                                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${signalBadgeClass(recVal)}`}>
                                           {recVal}
                                         </span>
                                       );
@@ -641,15 +635,8 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                                 (() => {
                                   const pred = batchPredictions.get(stock.symbol);
                                   const recVal = pred.recommendation || 'HOLD';
-                                  const colors = {
-                                    BUY: 'bg-green-500/20 text-green-400 border border-green-500/30',
-                                    STRONG_BUY: 'bg-green-500 text-white font-bold border border-green-600',
-                                    SELL: 'bg-red-500/20 text-red-400 border border-red-500/30',
-                                    STRONG_SELL: 'bg-red-500 text-white font-bold border border-red-600',
-                                    HOLD: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                                  };
                                   return (
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${colors[recVal] || colors.HOLD}`}>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${signalBadgeClass(recVal)}`}>
                                       {recVal}
                                     </span>
                                   );

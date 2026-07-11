@@ -9,6 +9,7 @@ import {
 import USStocksDataService from '../services/USStocksDataService'
 import { usStocksWebSocket } from '../services/WebSocketService'
 import { HorizonPill } from './crypto/utils'
+import { signalBadgeClass } from '../utils/signalColors'
 
 // ─────────────────────────────────────────────────────
 // Helpers
@@ -27,21 +28,11 @@ const directionColor = (dir) => {
   return 'text-yellow-400'
 }
 
-const SignalBadge = ({ signal }) => {
-  const s = String(signal || '').toUpperCase()
-  const color =
-    s.includes('STRONG BUY') ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-    s === 'BUY' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-    s.includes('STRONG SELL') ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
-    s === 'SELL' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-    'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-
-  return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border ${color}`}>
-      {signal || 'NEUTRAL'}
-    </span>
-  )
-}
+const SignalBadge = ({ signal }) => (
+  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm border ${signalBadgeClass(signal)}`}>
+    {signal || 'NEUTRAL'}
+  </span>
+)
 
 const ScoreBar = ({ label, value, max = 3, color = 'purple' }) => {
   const pct = Math.min(100, Math.max(0, ((Number(value) + max) / (max * 2)) * 100))
