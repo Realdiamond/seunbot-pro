@@ -84,10 +84,10 @@ export default function CryptoAnalysis({ initialSymbol = 'BTCUSDT' }) {
           </div>
 
           <button
-            onClick={refetch} disabled={isLoading}
+            onClick={refetch} disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 rounded-xl text-purple-400 text-sm font-medium transition-all disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
