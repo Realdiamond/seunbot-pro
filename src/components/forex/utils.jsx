@@ -28,5 +28,10 @@ export const fmtPct = (n, plus = true) => {
   return plus && n > 0 ? '+' + s : s
 }
 
-export const formatPair = (symbol = '') =>
-  symbol.length === 6 ? `${symbol.slice(0, 3)}/${symbol.slice(3)}` : symbol
+export const formatPair = (symbol = '') => {
+  if (!symbol) return ''
+  const clean = symbol.replace(/^FOREX_/i, '')
+  return clean.length === 6 && /^[A-Z]+$/i.test(clean)
+    ? `${clean.slice(0, 3)}/${clean.slice(3)}`
+    : clean
+}

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Target, RefreshCw, AlertTriangle, Filter, Zap, ArrowUp, ArrowDown, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { fetchForexSetups, triggerForexScan } from '../../services/ForexAPIService'
+import { formatPair } from './utils'
 
 const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
 
@@ -182,7 +183,7 @@ export default function ForexSetups() {
                 sortedSetups.map((s, i) => (
                   <tr key={`${s.symbol}-${i}`} className="border-b border-gray-700 hover:bg-gray-700/20 transition-colors">
                     <td className="py-3 px-4">
-                      <div className="text-white font-medium text-xs sm:text-sm">{s.symbol}</div>
+                      <div className="text-white font-medium text-xs sm:text-sm">{formatPair(s.symbol)}</div>
                       <div className="text-[10px] text-gray-400">{s.sector || 'Forex'}</div>
                     </td>
                     <td className="py-3 px-4">
