@@ -134,26 +134,21 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
 
   const isBullish = (t) => /bull|oversold|breakout|momentum/i.test(t || '')
   const isBearish = (t) => /bear|breakdown|overbought|selling/i.test(t || '')
-  const bullish = (data?.setups || []).filter(s => isBullish(s.setupType)).length
-  const bearish = (data?.setups || []).filter(s => isBearish(s.setupType)).length
+  const bullish = useMemo(() => (data?.setups || []).filter(s => isBullish(s.setupType)).length, [data])
+  const bearish = useMemo(() => (data?.setups || []).filter(s => isBearish(s.setupType)).length, [data])
 
-  const analyze = (symbol) => {
-    if (onAnalyze) onAnalyze(symbol)
-    else navigate(`/ngx/${symbol}`)
-  }
-
-  // Position sizing trade plan
+  // Trade Plan Position Sizing calculation
   const calculatedTradePlan = useMemo(() => {
     if (!selectedSetup) return null
     const entry = selectedSetup.currentPrice || 1.0
-    const sl = selectedSetup.stopLoss || entry * 0.93
-    const tp1 = selectedSetup.targetPrice || entry * 1.15
-    const isBearish = selectedSetup.isBearish
-    const tp2 = isBearish ? tp1 * 0.95 : tp1 * 1.08
+    const sl = selectedSetup.stopLoss || entry * 0.95
+    const tp1 = selectedSetup.targetPrice || entry * 1.10
+    const isBearish = /bear|sell|down/i.test(selectedSetup.setupType)
+    const tp2 = isBearish ? tp1 * 0.95 : tp1 * 1.05
     const riskPerShare = Math.abs(entry - sl)
     const riskAmount = (accountBalance * riskPercent) / 100
-    const shares = riskPerShare > 0 ? Math.round(riskAmount / riskPerShare) : 0
-    const totalCapitalRequired = shares * entry
+    const shares = riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0
+    const totalCost = shares * entry
 
     return {
       entry,
@@ -163,39 +158,45 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
       riskPerShare,
       riskAmount,
       shares,
-      totalCapitalRequired,
+      totalCost,
       isBearish
     }
   }, [selectedSetup, accountBalance, riskPercent])
 
+  const analyze = (symbol) => {
+    navigate(`/ngx/${symbol}`)
+  }
+
   return (
     <div className="space-y-6 fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-800/40 p-4 sm:p-6 rounded-2xl border border-gray-700/50">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
-            <Target className="w-7 h-7 text-orange-400" />
-            NGX Weekly Setups
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
+          <div className="flex items-center gap-2">
+            <Target className="h-6 w-6 text-orange-400" />
+            <h1 className="text-xl sm:text-2xl font-bold text-white">NGX Weekly Setups</h1>
+          </div>
+          <p className="text-xs sm:text-sm text-gray-400 mt-1">
             {data?.highProbabilityCount ?? 0} high-probability setups · scanned {(data?.totalScanned > 0 && data?.totalScanned <= 200) ? data.totalScanned : 120} stocks
-            {data?.scanTime ? ` · ${new Date(data.scanTime).toLocaleTimeString()}` : ''}
+            {data?.scanTime && (
+              <span className="ml-2 text-gray-500">
+                · {new Date(data.scanTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
           </p>
         </div>
-
         <button
-          onClick={load}
+          onClick={() => load(true)}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/40 border border-orange-500/30 rounded-xl text-orange-400 text-sm font-medium transition-all disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 rounded-xl text-xs sm:text-sm font-medium transition-colors disabled:opacity-50 self-start sm:self-auto"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh</span>
         </button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2"><BarChart3 className="h-4 w-4 text-orange-300" /><span className="text-orange-300 text-sm font-medium">Total Scanned</span></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2"><BarChart3 className="h-4 w-4 text-cyan-400" /><span className="text-cyan-400 text-sm font-medium">Total Scanned</span></div>
           <div className="text-white text-xl font-bold">{(data?.totalScanned > 0 && data?.totalScanned <= 200) ? data.totalScanned : 120}</div>
           <div className="text-xs text-gray-400">Nigerian Stocks</div>
         </div>
@@ -216,7 +217,6 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
         <div className="flex items-center space-x-2 mb-3">
           <Filter className="w-4 h-4 text-gray-400" />
@@ -263,11 +263,8 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{error}</div>
-      )}
+      {error && <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{error}</div>}
 
-      {/* Setups table */}
       <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -280,52 +277,43 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
                 <th className="text-left py-3 px-4 text-gray-300 font-medium text-xs sm:text-sm hidden md:table-cell">Target</th>
                 <th className="text-left py-3 px-4 text-gray-300 font-medium text-xs sm:text-sm hidden md:table-cell">Stop Loss</th>
                 <th className="text-left py-3 px-4 text-gray-300 font-medium text-xs sm:text-sm">R:R</th>
-                <th className="text-left py-3 px-4 text-gray-300 font-medium text-xs sm:text-sm hidden lg:table-cell">Volume</th>
                 <th className="text-right py-3 px-4 text-gray-300 font-medium text-xs sm:text-sm">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && !data ? (
-                <tr><td colSpan={9} className="text-center py-10 text-gray-400">
-                  <RefreshCw className="h-6 w-6 mx-auto mb-2 animate-spin opacity-60" />
-                  Scanning Nigerian stocks…
-                </td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-gray-400"><RefreshCw className="animate-spin h-6 w-6 mx-auto mb-2 opacity-60" /> Scanning Nigerian stocks…</td></tr>
               ) : sortedSetups.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-10 text-gray-400">
-                  <AlertTriangle className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                  No setups match the current filters.
-                </td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-gray-400"><AlertTriangle className="h-6 w-6 mx-auto mb-2 opacity-50" /> No setups match the current filters.</td></tr>
               ) : (
-                sortedSetups.map((s, i) => {
-                  const SectorIcon = sectorIcon(s.sector)
-                  return (
-                    <tr
-                      key={`${s.symbol}-${i}`}
-                      onClick={() => setSelectedSetup(s)}
-                      className="border-b border-gray-700 hover:bg-gray-700/30 transition-colors cursor-pointer"
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <SectorIcon className="h-4 w-4 text-gray-400" />
-                          <div>
-                            <div className="text-white font-medium text-xs sm:text-sm">{s.symbol}</div>
-                            <div className="text-[10px] text-gray-400">{s.sector}</div>
-                          </div>
+                sortedSetups.map((s, i) => (
+                  <tr
+                    key={`${s.symbol}-${i}`}
+                    onClick={() => setSelectedSetup(s)}
+                    className="border-b border-gray-700 hover:bg-gray-700/30 transition-colors cursor-pointer"
+                  >
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <StockLogo symbol={s.symbol} imageUrl={s.imageUrl} sector={s.sector} />
+                        <div>
+                          <div className="text-white font-medium text-xs sm:text-sm">{s.symbol}</div>
+                          <div className="text-[10px] text-gray-400">{s.sector}</div>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className={`font-medium text-xs sm:text-sm ${setupTypeColor(s.setupType)}`}>{s.setupType}</div>
-                        <div className="text-[10px] text-gray-400">{s.timeframe || '1D'}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-bold text-sm sm:text-lg ${confidenceColor(s.confidence)}`}>{s.probability}%</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            s.confidence === 'High' ? 'bg-green-500/20 text-green-400' :
-                            s.confidence === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-                          }`}>{s.confidence}</span>
-                        </div>
-                      </td>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className={`font-medium text-xs sm:text-sm ${setupTypeColor(s.setupType)}`}>{s.setupType}</div>
+                      <div className="text-[10px] text-gray-400">{s.timeframe || '1D'}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold text-sm sm:text-lg ${confidenceColor(s.confidence)}`}>{s.probability}%</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          s.confidence === 'High' ? 'bg-green-500/20 text-green-400' :
+                          s.confidence === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
+                        }`}>{s.confidence}</span>
+                      </div>
+                    </td>
                       <td className="py-3 px-4 hidden sm:table-cell">
                         <div className="text-white font-medium text-xs sm:text-sm">{fmtNaira(s.currentPrice)}</div>
                       </td>
@@ -367,9 +355,8 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
                         </div>
                       </td>
                     </tr>
-                  )
-                })
-              )}
+                  ))
+                )}
             </tbody>
           </table>
         </div>
@@ -382,9 +369,7 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-gray-800 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-orange-400">
-                  <Target className="h-6 w-6" />
-                </div>
+                <StockLogo symbol={selectedSetup.symbol} imageUrl={selectedSetup.imageUrl} sector={selectedSetup.sector} size="lg" />
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold text-white">{selectedSetup.symbol}</h2>
