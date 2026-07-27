@@ -685,8 +685,8 @@ class RealNGXDataService {
   // { totalScanned, highProbabilityCount, scanTime, setups: [...] }.
   async fetchWeeklySetups(params = {}) {
     try {
-      const minProb = params.minProbability || 30;
-      const maxRes = params.maxResults || 50;
+      const minProb = params.minProbability !== undefined ? params.minProbability : 0;
+      const maxRes = params.maxResults || 100;
       const res = await axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups?minProbability=${minProb}&maxResults=${maxRes}`, { timeout: 30000 });
       const data = res.data || {};
       const setups = Array.isArray(data.setups) ? data.setups.map(s => {
