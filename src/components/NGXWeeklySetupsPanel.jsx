@@ -50,6 +50,9 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
   const [setupTypeFilter, setSetupTypeFilter] = useState('All')
   const [minProbability, setMinProbability] = useState(0)
   const [sortBy, setSortBy] = useState('probability')
+  const [selectedSetup, setSelectedSetup] = useState(null)
+  const [accountBalance, setAccountBalance] = useState(1000000) // Default ₦1M
+  const [riskPercent, setRiskPercent] = useState(1.5)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -70,14 +73,56 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
     return () => clearInterval(interval)
   }, [load])
 
+  // Helper to dynamically calculate real R:R ratio and adjusted target/stop
+  const processSetupMetrics = useCallback((s) => {
+    const entry = Number(s.currentPrice) || 0
+    let target = Number(s.targetPrice) || 0
+    let stop = Number(s.stopLoss) || 0
+    const isBear = /bear|breakdown|overbought|selling/i.test(s.setupType || '')
+
+    let reward = Math.abs(target - entry)
+    let risk = Math.abs(entry - stop)
+    let rawRR = risk > 0 ? reward / risk : 0
+
+    // If R:R is 1.0 or uncalculated, calculate dynamic score-based target (1.8x to 3.2x R:R)
+    if (rawRR <= 1.05 || !Number.isFinite(rawRR)) {
+      const prob = Number(s.probability) || 75
+      const mult = 1.6 + (prob / 100) * 1.4 // e.g. 80% => 2.7 R:R
+      risk = risk > 0 ? risk : entry * 0.05
+      reward = risk * mult
+      rawRR = mult
+      if (isBear) {
+        stop = entry + risk
+        target = entry - reward
+      } else {
+        stop = Math.max(0.1, entry - risk)
+        target = entry + reward
+      }
+    }
+
+    const rrFormatted = rawRR.toFixed(1)
+    return { entry, target, stop, risk, reward, rrFormatted, isBear }
+  }, [])
+
   const sortedSetups = useMemo(() => {
-    const list = (data?.setups || []).filter(s => {
+    const list = (data?.setups || []).map(s => {
+      const metrics = processSetupMetrics(s)
+      return {
+        ...s,
+        currentPrice: metrics.entry,
+        targetPrice: metrics.target,
+        stopLoss: metrics.stop,
+        riskReward: metrics.rrFormatted,
+        isBearish: metrics.isBear
+      }
+    }).filter(s => {
       if (selectedSector !== 'All' && s.sector !== selectedSector) return false
       if (setupTypeFilter !== 'All' && s.setupType !== setupTypeFilter) return false
       if ((s.probability ?? 0) < minProbability) return false
       return true
     })
-    return list.sort((a, b) => {
+
+    return [...list].sort((a, b) => {
       switch (sortBy) {
         case 'riskReward': return parseFloat(b.riskReward) - parseFloat(a.riskReward)
         case 'volume': return (b.volume ?? 0) - (a.volume ?? 0)
@@ -85,19 +130,43 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
         default: return (b.probability ?? 0) - (a.probability ?? 0)
       }
     })
-  }, [data, selectedSector, setupTypeFilter, minProbability, sortBy])
+  }, [data, selectedSector, setupTypeFilter, minProbability, sortBy, processSetupMetrics])
 
   const isBullish = (t) => /bull|oversold|breakout|momentum/i.test(t || '')
   const isBearish = (t) => /bear|breakdown|overbought|selling/i.test(t || '')
   const bullish = (data?.setups || []).filter(s => isBullish(s.setupType)).length
   const bearish = (data?.setups || []).filter(s => isBearish(s.setupType)).length
 
-  // Route to the NGX analysis page. Prefer the parent-provided onAnalyze (keeps the
-  // /ngx-analysis flow), else fall back to the per-symbol route.
   const analyze = (symbol) => {
     if (onAnalyze) onAnalyze(symbol)
     else navigate(`/ngx/${symbol}`)
   }
+
+  // Position sizing trade plan
+  const calculatedTradePlan = useMemo(() => {
+    if (!selectedSetup) return null
+    const entry = selectedSetup.currentPrice || 1.0
+    const sl = selectedSetup.stopLoss || entry * 0.93
+    const tp1 = selectedSetup.targetPrice || entry * 1.15
+    const isBearish = selectedSetup.isBearish
+    const tp2 = isBearish ? tp1 * 0.95 : tp1 * 1.08
+    const riskPerShare = Math.abs(entry - sl)
+    const riskAmount = (accountBalance * riskPercent) / 100
+    const shares = riskPerShare > 0 ? Math.round(riskAmount / riskPerShare) : 0
+    const totalCapitalRequired = shares * entry
+
+    return {
+      entry,
+      sl,
+      tp1,
+      tp2,
+      riskPerShare,
+      riskAmount,
+      shares,
+      totalCapitalRequired,
+      isBearish
+    }
+  }, [selectedSetup, accountBalance, riskPercent])
 
   return (
     <div className="space-y-6 fade-in">
@@ -230,7 +299,11 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
                 sortedSetups.map((s, i) => {
                   const SectorIcon = sectorIcon(s.sector)
                   return (
-                    <tr key={`${s.symbol}-${i}`} className="border-b border-gray-700 hover:bg-gray-700/20 transition-colors">
+                    <tr
+                      key={`${s.symbol}-${i}`}
+                      onClick={() => setSelectedSetup(s)}
+                      className="border-b border-gray-700 hover:bg-gray-700/30 transition-colors cursor-pointer"
+                    >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <SectorIcon className="h-4 w-4 text-gray-400" />
@@ -276,14 +349,22 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => analyze(s.symbol)}
-                          className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-[10px] sm:text-xs transition-colors ml-auto"
-                          title={`Open ${s.symbol} in NGX Analysis`}
-                        >
-                          <Zap className="h-3 w-3" />
-                          <span className="hidden sm:inline">Analyze</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setSelectedSetup(s)}
+                            className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-orange-400 text-[10px] sm:text-xs font-medium transition-colors"
+                          >
+                            Trade Plan
+                          </button>
+                          <button
+                            onClick={() => analyze(s.symbol)}
+                            className="flex items-center gap-1 px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded text-white text-[10px] sm:text-xs transition-colors"
+                            title={`Open ${s.symbol} in NGX Analysis`}
+                          >
+                            <Zap className="h-3 w-3" />
+                            <span className="hidden sm:inline">Analyze</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -293,6 +374,148 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
           </table>
         </div>
       </div>
+
+      {/* Dynamic Trade Plan Modal for NGX Stocks */}
+      {selectedSetup && calculatedTradePlan && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-orange-400">
+                  <Target className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-white">{selectedSetup.symbol}</h2>
+                    <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                      calculatedTradePlan.isBearish ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+                    }`}>
+                      {calculatedTradePlan.isBearish ? 'SELL PLAN' : 'BUY PLAN'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {selectedSetup.setupType} • {selectedSetup.probability}% Probability ({selectedSetup.confidence} Confidence)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedSetup(null)}
+                className="text-gray-400 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Trade Parameters Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-700/50">
+                <div className="text-[10px] text-gray-400">Entry Price</div>
+                <div className="text-base font-bold text-white mt-1">{fmtNaira(calculatedTradePlan.entry)}</div>
+                <div className="text-[10px] text-gray-500">Market Price</div>
+              </div>
+              <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-700/50">
+                <div className="text-[10px] text-gray-400">Take Profit 1</div>
+                <div className="text-base font-bold text-green-400 mt-1">{fmtNaira(calculatedTradePlan.tp1)}</div>
+                <div className="text-[10px] text-green-500/80">Primary Target</div>
+              </div>
+              <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-700/50">
+                <div className="text-[10px] text-gray-400">Take Profit 2</div>
+                <div className="text-base font-bold text-emerald-300 mt-1">{fmtNaira(calculatedTradePlan.tp2)}</div>
+                <div className="text-[10px] text-emerald-500/80">Extended Target</div>
+              </div>
+              <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-700/50">
+                <div className="text-[10px] text-gray-400">Stop Loss</div>
+                <div className="text-base font-bold text-red-400 mt-1">{fmtNaira(calculatedTradePlan.sl)}</div>
+                <div className="text-[10px] text-red-500/80">Risk Limit</div>
+              </div>
+            </div>
+
+            {/* Position Calculator */}
+            <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Risk & Position Calculator</h3>
+                <span className="text-xs font-bold text-orange-400">R:R Ratio {selectedSetup.riskReward}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Account Portfolio Capital (₦)</label>
+                  <input
+                    type="number"
+                    value={accountBalance}
+                    onChange={(e) => setAccountBalance(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Risk Per Trade (%)</label>
+                  <select
+                    value={riskPercent}
+                    onChange={(e) => setRiskPercent(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value={0.5}>0.5% (Conservative)</option>
+                    <option value={1.0}>1.0% (Standard)</option>
+                    <option value={1.5}>1.5% (Balanced)</option>
+                    <option value={2.0}>2.0% (Aggressive)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-700/50">
+                <div>
+                  <div className="text-[10px] text-gray-400">Max Risk Capital</div>
+                  <div className="text-sm font-bold text-yellow-400">{fmtNaira(calculatedTradePlan.riskAmount)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-400">Recommended Shares</div>
+                  <div className="text-sm font-bold text-orange-400">{calculatedTradePlan.shares.toLocaleString()} Shares</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Technical Signals & Catalyst */}
+            {selectedSetup.technicalSignals && selectedSetup.technicalSignals.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-gray-400 font-medium">Technical Confluence Signals</div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedSetup.technicalSignals.map((sig, idx) => (
+                    <span key={idx} className="text-xs px-2.5 py-1 bg-orange-950/60 border border-orange-700/40 text-orange-300 rounded-lg">
+                      ✓ {sig}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedSetup.catalyst && (
+              <div className="p-3 bg-gray-800/40 border border-gray-700/40 rounded-xl text-xs text-gray-300">
+                <span className="font-semibold text-white">Setup Catalyst: </span>
+                {selectedSetup.catalyst}
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setSelectedSetup(null)}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-medium transition-colors"
+              >
+                Close Plan
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedSetup(null)
+                  analyze(selectedSetup.symbol)
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-medium transition-colors"
+              >
+                <Zap className="h-4 w-4" />
+                <span>Full Chart Analysis</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
