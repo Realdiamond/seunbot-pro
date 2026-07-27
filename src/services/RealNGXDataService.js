@@ -687,14 +687,30 @@ class RealNGXDataService {
     try {
       const minProb = params.minProbability !== undefined ? params.minProbability : 0;
       const maxRes = params.maxResults || 100;
-      const res = await axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups?minProbability=${minProb}&maxResults=${maxRes}`, { timeout: 30000 });
+      const [res, assets] = await Promise.all([
+        axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups?minProbability=${minProb}&maxResults=${maxRes}`, { timeout: 30000 }),
+        this.fetchAssets().catch(() => [])
+      ]);
       const data = res.data || {};
+      
+      const assetMap = new Map();
+      if (Array.isArray(assets)) {
+        for (const a of assets) {
+          const norm = this.normalizeAssetSymbol(a.symbol);
+          if (norm) assetMap.set(norm, a);
+        }
+      }
+
       const setups = Array.isArray(data.setups) ? data.setups.map(s => {
         const currentPrice = this.toNumber(s.currentPrice, 0);
         const targetPrice = this.toNumber(s.targetPrice, 0);
         const stopLoss = this.toNumber(s.stopLoss, 0);
+        const normSymbol = this.normalizeAssetSymbol(s.symbol);
+        const assetInfo = assetMap.get(normSymbol);
+
         return {
           ...s,
+          imageUrl: assetInfo?.imageUrl || s.imageUrl || '',
           currentPrice,
           targetPrice,
           stopLoss,
