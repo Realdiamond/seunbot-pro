@@ -683,9 +683,11 @@ class RealNGXDataService {
   // ── GET /api/NGXAnalysis/dashboard/setups — weekly high-probability setups ──
   // Replaces the removed web-scraper feed. Returns the panel-ready shape
   // { totalScanned, highProbabilityCount, scanTime, setups: [...] }.
-  async fetchWeeklySetups() {
+  async fetchWeeklySetups(params = {}) {
     try {
-      const res = await axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups`, { timeout: 30000 });
+      const minProb = params.minProbability || 30;
+      const maxRes = params.maxResults || 50;
+      const res = await axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups?minProbability=${minProb}&maxResults=${maxRes}`, { timeout: 30000 });
       const data = res.data || {};
       const setups = Array.isArray(data.setups) ? data.setups.map(s => {
         const currentPrice = this.toNumber(s.currentPrice, 0);
