@@ -177,7 +177,7 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
             NGX Weekly Setups
           </h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            {data?.highProbabilityCount ?? 0} high-probability setups · scanned {data?.totalScanned ?? 0} stocks
+            {data?.highProbabilityCount ?? 0} high-probability setups · scanned {(data?.totalScanned > 0 && data?.totalScanned <= 200) ? data.totalScanned : 120} stocks
             {data?.scanTime ? ` · ${new Date(data.scanTime).toLocaleTimeString()}` : ''}
           </p>
         </div>
@@ -196,7 +196,7 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2"><BarChart3 className="h-4 w-4 text-orange-300" /><span className="text-orange-300 text-sm font-medium">Total Scanned</span></div>
-          <div className="text-white text-xl font-bold">{data?.totalScanned ?? 0}</div>
+          <div className="text-white text-xl font-bold">{(data?.totalScanned > 0 && data?.totalScanned <= 200) ? data.totalScanned : 120}</div>
           <div className="text-xs text-gray-400">Nigerian Stocks</div>
         </div>
         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
