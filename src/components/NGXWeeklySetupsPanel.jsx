@@ -35,6 +35,31 @@ const sectorIcon = (sector) => ({
   'Insurance': Shield,
 }[sector] || Building)
 
+function StockLogo({ symbol, imageUrl, sector, size = 'sm' }) {
+  const [imgError, setImgError] = useState(false)
+  const cleanSym = (symbol || '').toUpperCase().trim()
+  const initials = cleanSym.slice(0, 2)
+  const primaryUrl = imageUrl || `https://images.financialmodelingprep.com/symbol/${cleanSym}.png`
+
+  const dims = size === 'lg' ? 'w-10 h-10 text-sm' : 'w-7 h-7 sm:w-8 sm:h-8 text-[10px] sm:text-xs'
+
+  return (
+    <div className={`relative ${dims} rounded-full bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700/80 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm`}>
+      <span className="font-bold text-cyan-400 select-none">
+        {initials}
+      </span>
+      {!imgError && primaryUrl && (
+        <img
+          src={primaryUrl}
+          alt={`${cleanSym} logo`}
+          className="absolute inset-0 w-full h-full object-cover bg-gray-900 transition-opacity duration-200"
+          onError={() => setImgError(true)}
+        />
+      )}
+    </div>
+  )
+}
+
 // Guarded ₦ formatter — never throws on null/undefined/0 (was setup.currentPrice.toFixed()).
 const fmtNaira = (v) => {
   const n = Number(v)
