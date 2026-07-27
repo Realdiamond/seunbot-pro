@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Target, RefreshCw, AlertTriangle, Filter, Zap, ArrowUp, ArrowDown, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { fetchForexSetups } from '../../services/ForexAPIService'
+import { fetchForexSetups, triggerForexScan } from '../../services/ForexAPIService'
 
 const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
 
@@ -24,10 +24,13 @@ export default function ForexSetups() {
   const [sortBy, setSortBy] = useState('probability')
   const navigate = useNavigate()
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceTrigger = false) => {
     setLoading(true)
     setError(null)
     try {
+      if (forceTrigger) {
+        await triggerForexScan().catch(() => null)
+      }
       const res = await fetchForexSetups()
       setData(res)
     } catch (err) {
@@ -72,7 +75,7 @@ export default function ForexSetups() {
         </div>
 
         <button
-          onClick={load}
+          onClick={() => load(true)}
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/30 rounded-xl text-cyan-300 text-sm font-medium transition-all disabled:opacity-50"
         >

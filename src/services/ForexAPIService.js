@@ -107,3 +107,17 @@ export async function fetchForexAnalysis(symbol, interval = '1d', opts = {}) {
 
   throw new Error(`fetchForexAnalysis(${symbol}): timed out after ${maxRetries} retries`)
 }
+
+/**
+ * POST /api/ForexAnalysis/trigger-scan
+ * Triggers immediate live price poll from Massive API and recalculates weekly setups on-demand.
+ */
+export async function triggerForexScan() {
+  const url = `${BASE}/trigger-scan`
+  const res = await fetch(url, { method: 'POST' })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`triggerForexScan: ${res.status} ${res.statusText} ${text}`.trim())
+  }
+  return res.json()
+}
