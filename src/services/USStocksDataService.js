@@ -84,8 +84,8 @@ class USStocksDataService {
       // (~5000+ symbols). Pages are fetched in bounded-concurrency batches
       // to surface the whole list without overwhelming the API.
       if (totalPages > 1) {
-        const MAX_PAGES = 60;            // safety ceiling (~6000 symbols)
-        const BATCH_SIZE = 8;            // concurrent requests per batch
+        const MAX_PAGES = 250;            // safety ceiling (~25,000 symbols, covers entire DB universe)
+        const BATCH_SIZE = 10;           // concurrent requests per batch
         const lastPage = Math.min(totalPages, MAX_PAGES);
         const pageNumbers = Array.from({ length: lastPage - 1 }, (_, i) => i + 2);
 

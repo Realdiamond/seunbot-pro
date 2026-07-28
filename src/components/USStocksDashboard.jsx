@@ -34,12 +34,23 @@ const US_ETFS = [
   { symbol: 'TLT', name: 'iShares 20+ Yr Treasury' },
 ];
 
+const TOP_POPULAR_US_STOCKS = new Set([
+  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'BRK.B', 'LLY', 'AVGO',
+  'JPM', 'V', 'UNH', 'MA', 'XOM', 'WMT', 'JNJ', 'PG', 'ORCL', 'COST',
+  'AMD', 'NFLX', 'BAC', 'HD', 'CRM', 'ADBE', 'CVX', 'PEP', 'KO', 'TSM',
+  'NKE', 'DIS', 'INTC', 'PFE', 'ABBV', 'MRK', 'TMO', 'CSCO', 'ACN', 'ABT',
+  'MCD', 'LIN', 'PM', 'TXN', 'DHR', 'AMGN', 'QCOM', 'IBM', 'GE', 'CAT',
+  'SPY', 'QQQ', 'DIA', 'IWM', 'VOO', 'VTI', 'ARKK', 'XLK', 'XLF', 'XLE',
+  'NOW', 'ISRG', 'UBER', 'GS', 'MS', 'BKNG', 'AMAT', 'LRCX', 'PLTR', 'PANW'
+]);
+
 const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = null }) => {
   const [stocks, setStocks] = useState([]);
   const [marketSummary, setMarketSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSector, setSelectedSector] = useState('All');
+  const [marketCategory, setMarketCategory] = useState('all'); // 'all', 'top', 'high_volatility', 'low_volatility'
   const [sortBy, setSortBy] = useState('changePercent');
   const [sortOrder, setSortOrder] = useState('desc');
   // Always hold selectedStock as an object. initialSymbol arrives as a bare string from the
@@ -82,7 +93,7 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
   // Reset pagination when filter/sort changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedSector, sortBy, sortOrder]);
+  }, [searchTerm, selectedSector, marketCategory, sortBy, sortOrder]);
 
   // WebSocket price update handler
   const handleWsUpdate = useCallback((update) => {
@@ -250,7 +261,20 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                            stock.symbol.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesSector = selectedSector === 'All' || stock.sector === selectedSector;
       const matchesWatchlist = viewMode === 'all' || watchlist.includes(stock.symbol);
-      return matchesSearch && matchesSector && matchesWatchlist;
+
+      let matchesCategory = true;
+      const cleanSym = (stock.symbol || '').toUpperCase().trim();
+      const changeAbs = Math.abs(stock.changePercent || 0);
+
+      if (marketCategory === 'top') {
+        matchesCategory = TOP_POPULAR_US_STOCKS.has(cleanSym);
+      } else if (marketCategory === 'high_volatility') {
+        matchesCategory = changeAbs >= 3.0 || (stock.price > 0 && stock.price <= 10);
+      } else if (marketCategory === 'low_volatility') {
+        matchesCategory = changeAbs < 1.5 && stock.price > 10;
+      }
+
+      return matchesSearch && matchesSector && matchesWatchlist && matchesCategory;
     })
     .sort((a, b) => {
       const aVal = a[sortBy];
@@ -487,7 +511,7 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Search */}
                 <div className="lg:col-span-2">
                   <label className="block text-sm text-gray-400 mb-2">Search Stocks</label>
@@ -501,6 +525,21 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                       className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
                     />
                   </div>
+                </div>
+
+                {/* Market Tier / Category */}
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">Market Tier / Category</label>
+                  <select
+                    value={marketCategory}
+                    onChange={(e) => setMarketCategory(e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 font-medium"
+                  >
+                    <option value="all">🌐 All US Stocks ({stocks.length})</option>
+                    <option value="top">⭐ Popular / Top US Stocks</option>
+                    <option value="high_volatility">⚡ High Volatility / Movers</option>
+                    <option value="low_volatility">🛡️ Low Volatility / Stable</option>
+                  </select>
                 </div>
 
                 {/* Sector Filter */}
@@ -528,7 +567,7 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                     <option value="changePercent">% Change</option>
                     <option value="price">Price</option>
                     <option value="volume">Volume</option>
-                    <option value="marketCap">Market Cap</option>
+                    <option value="symbol">Symbol</option>
                   </select>
                 </div>
               </div>
