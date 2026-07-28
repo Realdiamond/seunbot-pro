@@ -7,7 +7,7 @@
 const BASE = '/api/ForexAnalysis'
 const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function fetchWithTimeout(url, timeoutMs = 15000) {
+async function fetchWithTimeout(url, timeoutMs = 25000) {
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -25,12 +25,22 @@ async function fetchWithTimeout(url, timeoutMs = 15000) {
  */
 export async function fetchForexPairs({ page = 1, pageSize = 20 } = {}) {
   const url = `${BASE}/pairs?page=${page}&pageSize=${pageSize}`
-  const res = await fetchWithTimeout(url)
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`fetchForexPairs: ${res.status} ${res.statusText} ${text}`.trim())
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, 25000)
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`fetchForexPairs: ${res.status} ${res.statusText} ${text}`.trim())
+      }
+      return await res.json()
+    } catch (err) {
+      if (attempt === 0 && (err.name === 'AbortError' || String(err.message).includes('aborted'))) {
+        await SLEEP(1500)
+        continue
+      }
+      throw err
+    }
   }
-  return res.json()
 }
 
 /**
