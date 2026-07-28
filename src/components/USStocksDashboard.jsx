@@ -429,7 +429,7 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
                   
                   <div className="bg-gray-700/50 rounded-lg p-4">
                     <div className="text-sm text-gray-400 mb-1">Total Stocks</div>
-                    <div className="text-2xl font-bold text-white">{marketSummary.totalStocks}</div>
+                    <div className="text-2xl font-bold text-white">{stocks.length || marketSummary?.totalStocks || 0}</div>
                     <div className="text-sm text-gray-400">Tracked</div>
                   </div>
 
