@@ -282,13 +282,15 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
       return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
     });
 
-  // Calculate sector performance
+  // Calculate sector performance (filtering out corrupt extreme changePercent outliers)
   const sectorPerformance = sectors
     .filter(s => s !== 'All')
     .map(sector => {
-      const sectorStocks = stocks.filter(s => s.sector === sector);
-      const avgChange = sectorStocks.reduce((sum, s) => sum + s.changePercent, 0) / sectorStocks.length;
-      return { sector, avgChange, count: sectorStocks.length };
+      const sectorStocks = stocks.filter(s => s.sector === sector && s.changePercent >= -95 && s.changePercent <= 300);
+      const avgChange = sectorStocks.length > 0
+        ? Math.min(Math.max(sectorStocks.reduce((sum, s) => sum + s.changePercent, 0) / sectorStocks.length, -100), 500)
+        : 0;
+      return { sector, avgChange, count: stocks.filter(s => s.sector === sector).length };
     })
     .sort((a, b) => b.avgChange - a.avgChange);
 
@@ -419,38 +421,42 @@ const USStocksDashboard = ({ initialSymbol = null, viewMode: initialViewMode = n
               <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h2 className="text-xl font-semibold text-white mb-4">Market Overview</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                  <div className="bg-gray-700/50 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">US Stocks Index</div>
-                    <div className="text-2xl font-bold text-white">{marketSummary.index.toFixed(2)}</div>
-                    <div className={`text-sm font-semibold ${marketSummary.indexChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {marketSummary.indexChange >= 0 ? '+' : ''}{marketSummary.indexChange.toFixed(2)} ({marketSummary.indexChangePercent.toFixed(2)}%)
+                  <div className="bg-gray-700/50 rounded-lg p-4 min-w-0 overflow-hidden">
+                    <div className="text-sm text-gray-400 mb-1 truncate">US Stocks Index</div>
+                    <div className="text-xl sm:text-2xl font-bold text-white truncate">
+                      {marketSummary.index > 1000000 
+                        ? `$${(marketSummary.index / 1000000000).toFixed(2)}B`
+                        : marketSummary.index.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className={`text-xs sm:text-sm font-semibold truncate ${marketSummary.indexChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {marketSummary.indexChange >= 0 ? '+' : ''}{Math.abs(marketSummary.indexChangePercent) > 100 ? marketSummary.indexChangePercent.toFixed(1) : marketSummary.indexChangePercent.toFixed(2)}%
                     </div>
                   </div>
                   
-                  <div className="bg-gray-700/50 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Total Stocks</div>
-                    <div className="text-2xl font-bold text-white">{stocks.length || marketSummary?.totalStocks || 0}</div>
-                    <div className="text-sm text-gray-400">Tracked</div>
+                  <div className="bg-gray-700/50 rounded-lg p-4 min-w-0 overflow-hidden">
+                    <div className="text-sm text-gray-400 mb-1 truncate">Total Stocks</div>
+                    <div className="text-xl sm:text-2xl font-bold text-white truncate">{(stocks.length || marketSummary?.totalStocks || 0).toLocaleString()}</div>
+                    <div className="text-sm text-gray-400 truncate">Tracked</div>
                   </div>
 
-                  <div className="bg-gray-700/50 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Advancers</div>
-                    <div className="text-2xl font-bold text-green-400">{stocks.filter(s => s.changePercent > 0).length}</div>
-                    <div className="text-sm text-gray-400">Stocks Up</div>
+                  <div className="bg-gray-700/50 rounded-lg p-4 min-w-0 overflow-hidden">
+                    <div className="text-sm text-gray-400 mb-1 truncate">Advancers</div>
+                    <div className="text-xl sm:text-2xl font-bold text-green-400 truncate">{stocks.filter(s => s.changePercent > 0).length.toLocaleString()}</div>
+                    <div className="text-sm text-gray-400 truncate">Stocks Up</div>
                   </div>
 
-                  <div className="bg-gray-700/50 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Decliners</div>
-                    <div className="text-2xl font-bold text-red-400">{stocks.filter(s => s.changePercent < 0).length}</div>
-                    <div className="text-sm text-gray-400">Stocks Down</div>
+                  <div className="bg-gray-700/50 rounded-lg p-4 min-w-0 overflow-hidden">
+                    <div className="text-sm text-gray-400 mb-1 truncate">Decliners</div>
+                    <div className="text-xl sm:text-2xl font-bold text-red-400 truncate">{stocks.filter(s => s.changePercent < 0).length.toLocaleString()}</div>
+                    <div className="text-sm text-gray-400 truncate">Stocks Down</div>
                   </div>
 
-                  <div className="bg-gray-700/50 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Data Quality</div>
-                    <div className="text-lg font-semibold text-white">
+                  <div className="bg-gray-700/50 rounded-lg p-4 min-w-0 overflow-hidden">
+                    <div className="text-sm text-gray-400 mb-1 truncate">Data Quality</div>
+                    <div className="text-base sm:text-lg font-semibold text-white truncate">
                       {marketSummary.isMock ? '🟡 Simulated' : '🟢 Live'}
                     </div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-gray-400 truncate">
                       {marketSummary.sources?.length || 0} source(s)
                     </div>
                   </div>

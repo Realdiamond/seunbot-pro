@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Target, TrendingUp, TrendingDown, Activity, Volume2, 
@@ -11,10 +11,10 @@ import USStocksDataService from '../services/USStocksDataService'
 const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
   const navigate = useNavigate()
   const [weeklySetups, setWeeklySetups] = useState(null)
-  const [loading, setLoading] = useState(false)   // NOT auto-loading on mount
+  const [loading, setLoading] = useState(true)
   const [selectedSector, setSelectedSector] = useState('All')
   const [selectedSetupType, setSelectedSetupType] = useState('All')
-  const [minProbability, setMinProbability] = useState(60)
+  const [minProbability, setMinProbability] = useState(0)
   const [sortBy, setSortBy] = useState('probability')
   const [watchlist, setWatchlist] = useState([])
   const [scanProgress, setScanProgress] = useState({ done: 0, total: 0 })
@@ -23,25 +23,23 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
   const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
 
   /**
-   * Run prediction scan — called only on user action, never on mount.
-   * Scans up to 20 ready stocks, 5 at a time to avoid hammering the API.
+   * Run prediction scan — auto-loads on mount or user refresh action.
+   * Scans 150+ US stocks from the backend setups service.
    */
   const runScan = useCallback(async () => {
     setLoading(true)
     setWeeklySetups(null)
-    setScanProgress({ done: 0, total: 14 }) // watchlist is 14 stocks
+    setScanProgress({ done: 0, total: 150 })
 
     try {
-      // Preferred: backend-scanned setups (GET /api/UsPrediction/dashboard/setups) — one
-      // fast cached call across all US stocks with data. Falls through to the client-side
-      // watchlist scan below if it's unavailable or returns nothing.
+      // Preferred: backend-scanned setups (GET /api/UsPrediction/dashboard/setups) — fast cached call
       try {
-        const data = await USStocksDataService.fetchWeeklySetups({ minProbability: 50, maxResults: 50 })
+        const data = await USStocksDataService.fetchWeeklySetups({ minProbability: 0, maxResults: 150 })
         const backendSetups = Array.isArray(data?.setups) ? data.setups.map(mapBackendSetup) : []
         if (backendSetups.length > 0) {
-          setScanProgress({ done: 14, total: 14 })
+          setScanProgress({ done: 150, total: 150 })
           setWeeklySetups({
-            setups: backendSetups.sort((a, b) => b.probability - a.probability),
+            setups: backendSetups,
             totalScanned: data.totalScanned ?? backendSetups.length,
             highProbabilityCount: data.highProbabilityCount ?? backendSetups.length,
             scanTime: data.scanTime || new Date().toISOString()
@@ -119,6 +117,10 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    runScan()
+  }, [runScan])
 
   // Map a backend setup (GET /dashboard/setups) into the shape this panel renders.
   const mapBackendSetup = (s) => {

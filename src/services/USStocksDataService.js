@@ -226,17 +226,23 @@ class USStocksDataService {
       const unchanged = Math.max(totalUniverse - advancers - decliners, 0);
       const totalVolume = stocks.reduce((sum, s) => sum + this.toNumber(s.volume, 0), 0);
 
-      // Dynamically calculate index movement based on the average performance of stocks
-      const validStocks = stocks.filter(s => s.price > 0);
+      // Dynamically calculate index movement based on realistic stock performance (filtering out extreme corrupt outliers)
+      const validStocks = stocks.filter(s => {
+        const p = this.toNumber(s.price, 0);
+        const cp = this.toNumber(s.changePercent, 0);
+        return p > 0 && cp >= -95 && cp <= 300;
+      });
+
       let avgChangePercent = 0;
       if (validStocks.length > 0) {
         avgChangePercent = validStocks.reduce((sum, s) => sum + this.toNumber(s.changePercent, 0), 0) / validStocks.length;
       }
+      avgChangePercent = Math.min(Math.max(avgChangePercent, -15), 15);
 
-      const baseIndex = 15000;
-      const indexChangePercent = avgChangePercent;
-      const indexChange = baseIndex * (indexChangePercent / 100);
-      const index = baseIndex + indexChange;
+      const baseIndex = 15420.50; // S&P 500 / Nasdaq benchmark scale
+      const indexChangePercent = Math.round(avgChangePercent * 100) / 100;
+      const indexChange = Math.round(baseIndex * (indexChangePercent / 100) * 100) / 100;
+      const index = Math.round((baseIndex + indexChange) * 100) / 100;
 
       return {
         index,
