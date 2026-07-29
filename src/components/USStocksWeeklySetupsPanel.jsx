@@ -498,9 +498,19 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
                     onClick={() => navigate(`/usstocks/${setup.symbol}`)}
                   >
                     <td className="py-3 px-2 sm:px-4">
-                      <div>
-                        <div className="text-white font-medium text-xs sm:text-sm">{setup.symbol}</div>
-                        <div className="text-[10px] text-gray-400">{setup.sector}</div>
+                      <div className="flex items-center space-x-2.5">
+                        <div className="relative h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-gray-700/80 border border-gray-600/50 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
+                          <img
+                            src={`https://financialmodelingprep.com/image-stock/${String(setup.symbol).replace(/^US_/i, '')}.png`}
+                            alt={`${setup.symbol} logo`}
+                            className="h-full w-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                        </div>
+                        <div>
+                          <div className="text-white font-bold text-xs sm:text-sm">{setup.symbol}</div>
+                          <div className="text-[10px] text-gray-400">{setup.sector}</div>
+                        </div>
                       </div>
                     </td>
                     

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   MapPin, Building, Fuel, Package, Phone, Factory, Shield, 
   TrendingUp, TrendingDown, Volume2, BarChart3, RefreshCw,
@@ -17,6 +18,7 @@ let globalCachedSummary = null
 let globalLastUpdate = null
 
 const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: initialViewMode = null }) => {
+  const navigate = useNavigate()
   const [selectedStock, setSelectedStock] = useState(initialSymbol || 'AAPL')
   const [allStocks, setAllStocks] = useState(globalCachedStocks)
   const [marketSummary, setMarketSummary] = useState(globalCachedSummary)
@@ -325,10 +327,8 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
               Watchlist
             </button>
             <button
-              onClick={() => setViewMode('setups')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                viewMode === 'setups' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
-              }`}
+              onClick={() => navigate('/usstocks-setups')}
+              className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors text-gray-400 hover:text-white hover:bg-gray-800/60"
             >
               Weekly Setups
             </button>
