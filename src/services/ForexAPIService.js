@@ -4,6 +4,8 @@
  * All requests go through the Vite proxy (/api).
  */
 
+import { etagFetch } from '../utils/etagFetch'
+
 const BASE = '/api/ForexAnalysis'
 const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -51,12 +53,7 @@ export async function fetchForexPairs({ page = 1, pageSize = 20 } = {}) {
  */
 export async function fetchForexSetups({ maxResults = 150 } = {}) {
   const url = `${BASE}/dashboard/setups?maxResults=${maxResults}`
-  const res = await fetchWithTimeout(url, 30000)
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`fetchForexSetups: ${res.status} ${res.statusText} ${text}`.trim())
-  }
-  const data = await res.json()
+  const data = await etagFetch(url)
   const num = (v, f = 0) => (Number.isFinite(Number(v)) ? Number(v) : f)
   const setups = Array.isArray(data?.setups) ? data.setups.map((s) => {
     const currentPrice = num(s.currentPrice)

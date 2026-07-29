@@ -161,7 +161,7 @@ function App() {
             <div className="flex flex-col p-5 border-b border-gray-700/80 gap-3">
               <div className="flex items-center space-x-3">
                 <div className="relative flex-shrink-0">
-                  <img src="/favicon.ico" alt="SeunBot Pro" className="h-9 w-9 rounded-xl object-cover ring-2 ring-blue-500/40" />
+                  <img src="/logo.svg" alt="SeunBot Pro" className="h-9 w-9 rounded-xl ring-2 ring-blue-500/40" />
                   <span className="absolute -bottom-1 -right-1 text-[10px] leading-none">📈</span>
                 </div>
                 <div>

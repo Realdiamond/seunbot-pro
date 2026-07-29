@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { Globe, BarChart3, TrendingUp, TrendingDown, Zap,
          RefreshCw, AlertCircle, Search, Activity, ChevronRight } from 'lucide-react'
-import { useCryptoDashboard } from '../../hooks/useCryptoDashboard'
-import { useCryptoPairs }     from '../../hooks/useCryptoPairs'
+import { useCryptoDashboard }    from '../../hooks/useCryptoDashboard'
+import { useCryptoPairs }        from '../../hooks/useCryptoPairs'
+import { useLivePriceStream }    from '../../hooks/useLivePriceStream'
 import StatCard      from './StatCard'
 import MiniPairCards from './MiniPairCards'
 import PairTable     from './PairTable'
@@ -21,13 +22,24 @@ export default function CryptoDashboard({ onSelectPair }) {
   const merged = useMemo(() => {
     const dataSource = market.length > 0 ? market : pairs;
     if (!dataSource || !dataSource.length) return []
-    
     const pairMap = Object.fromEntries((pairs ?? []).map(p => [p.symbol, p]))
     return dataSource.map(m => ({ ...m, name: pairMap[m.symbol]?.name ?? m.symbol }))
   }, [market, pairs])
 
+  // SSE — only watch the symbols currently in the merged list (visible on screen)
+  const visibleSymbols = useMemo(() => merged.map(m => m.symbol), [merged])
+  const { prices: ssePrices, connected: sseConnected } = useLivePriceStream(visibleSymbols)
+
+
   const filtered = useMemo(() => {
     let d = [...merged]
+    // Overlay SSE live prices — replaces polling-fetched price with push-updated price
+    if (Object.keys(ssePrices).length > 0) {
+      d = d.map(row => {
+        const live = ssePrices[row.symbol]
+        return live != null ? { ...row, currentPrice: live } : row
+      })
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       d = d.filter(r => r.symbol.toLowerCase().includes(q))
@@ -37,7 +49,7 @@ export default function CryptoDashboard({ onSelectPair }) {
       return sortDir === 'desc' ? bv - av : av - bv
     })
     return d
-  }, [merged, search, sortBy, sortDir])
+  }, [merged, ssePrices, search, sortBy, sortDir])
 
   const totalVol   = useMemo(() => merged.reduce((s, m) => s + (m.volume24h || 0), 0), [merged])
   const gainers    = useMemo(() => merged.filter(m => (m.priceChangePercent24h ?? 0) > 0).length, [merged])
