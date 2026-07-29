@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="letter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="chart" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="100" height="100" rx="20" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow border -->
+  <rect width="100" height="100" rx="20" fill="none" stroke="#38bdf8" stroke-width="1.5" opacity="0.25"/>
+
+  <!-- Bold S letter -->
+  <text
+    x="50" y="66"
+    font-family="'Arial Black', 'Helvetica Neue', sans-serif"
+    font-size="64"
+    font-weight="900"
+    text-anchor="middle"
+    fill="url(#letter)"
+  >S</text>
+
+  <!-- Chart line accent across the bottom third -->
+  <polyline
+    points="14,78 26,63 40,70 56,50 72,40 86,28"
+    stroke="url(#chart)"
+    stroke-width="4"
+    fill="none"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.85"
+  />
+
+  <!-- Dot at chart peak -->
+  <circle cx="86" cy="28" r="3.5" fill="#22d3ee" opacity="0.9"/>
+</svg>

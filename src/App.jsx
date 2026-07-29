@@ -50,6 +50,33 @@ function computeMarketStatus(market, now = new Date()) {
   }
 }
 
+// Inline SVG Logo for SeunBot Pro — zero HTTP requests, 100% reliable rendering
+function LogoIcon({ className = "h-9 w-9" }) {
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sb_bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#0f172a"/>
+          <stop offset="100%" stopColor="#1e293b"/>
+        </linearGradient>
+        <linearGradient id="sb_letter" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#38bdf8"/>
+          <stop offset="100%" stopColor="#6366f1"/>
+        </linearGradient>
+        <linearGradient id="sb_chart" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#22d3ee"/>
+          <stop offset="100%" stopColor="#818cf8"/>
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="20" fill="url(#sb_bg)"/>
+      <rect width="100" height="100" rx="20" fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.25"/>
+      <text x="50" y="66" fontFamily="'Arial Black', 'Helvetica Neue', sans-serif" fontSize="64" fontWeight="900" textAnchor="middle" fill="url(#sb_letter)">S</text>
+      <polyline points="14,78 26,63 40,70 56,50 72,40 86,28" stroke="url(#sb_chart)" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.85"/>
+      <circle cx="86" cy="28" r="3.5" fill="#22d3ee" opacity="0.9"/>
+    </svg>
+  )
+}
+
 // Time-based greeting for Adelaja Seun
 function getGreeting() {
   const hour = new Date().getHours()
@@ -161,7 +188,7 @@ function App() {
             <div className="flex flex-col p-5 border-b border-gray-700/80 gap-3">
               <div className="flex items-center space-x-3">
                 <div className="relative flex-shrink-0">
-                  <img src="/logo.svg" alt="SeunBot Pro" className="h-9 w-9 rounded-xl ring-2 ring-blue-500/40" />
+                  <LogoIcon className="h-9 w-9 rounded-xl ring-2 ring-blue-500/40" />
                   <span className="absolute -bottom-1 -right-1 text-[10px] leading-none">📈</span>
                 </div>
                 <div>
