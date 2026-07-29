@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useMemo, useState } from 'react'
+import React, { lazy, Suspense, useMemo, useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
   BarChart3, Globe, MapPin, Target,
@@ -48,6 +48,15 @@ function computeMarketStatus(market, now = new Date()) {
       return { open, label: open ? 'NGX Open' : 'NGX Closed' }
     }
   }
+}
+
+// Time-based greeting for Adelaja Seun
+function getGreeting() {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12)  return { text: 'Good Morning',   emoji: '🌅' }
+  if (hour >= 12 && hour < 17) return { text: 'Good Afternoon', emoji: '☀️' }
+  if (hour >= 17 && hour < 21) return { text: 'Good Evening',   emoji: '🌆' }
+  return { text: 'Good Night', emoji: '🌙' }
 }
 
 // Wrapper component for NGX symbol-based analysis route
@@ -101,6 +110,13 @@ function App() {
   const [selectedCryptoPair, setSelectedCryptoPair] = useState('BTCUSDT')
   const [selectedForexPair, setSelectedForexPair] = useState('AUDCAD')
   const [selectedNgxStock, setSelectedNgxStock] = useState('GTCO')
+  const [greeting, setGreeting] = useState(getGreeting())
+
+  // Update greeting if the hour flips while the app is open
+  useEffect(() => {
+    const id = setInterval(() => setGreeting(getGreeting()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
@@ -141,12 +157,25 @@ function App() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}>
           <div className="flex flex-col h-full">
-            {/* Logo */}
-            <div className="flex items-center space-x-3 p-6 border-b border-gray-700">
-              <Brain className="h-8 w-8 text-blue-500" />
-              <div>
-                <h1 className="text-xl font-bold text-white">SeunBot Pro</h1>
-                <p className="text-xs text-gray-400">Advanced Trading Analysis</p>
+            {/* Logo + Greeting */}
+            <div className="flex flex-col p-5 border-b border-gray-700/80 gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="relative flex-shrink-0">
+                  <img src="/favicon.ico" alt="SeunBot Pro" className="h-9 w-9 rounded-xl object-cover ring-2 ring-blue-500/40" />
+                  <span className="absolute -bottom-1 -right-1 text-[10px] leading-none">📈</span>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white leading-tight">SeunBot Pro</h1>
+                  <p className="text-[11px] text-gray-400">Advanced Trading Analysis</p>
+                </div>
+              </div>
+              {/* Admin greeting */}
+              <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600/20 to-cyan-600/10 border border-blue-500/20 rounded-xl px-3 py-2">
+                <span className="text-lg leading-none">{greeting.emoji}</span>
+                <div>
+                  <p className="text-[11px] text-gray-400 leading-none mb-0.5">{greeting.text},</p>
+                  <p className="text-sm font-semibold text-white leading-tight">Adelaja Seun</p>
+                </div>
               </div>
             </div>
 

@@ -49,8 +49,8 @@ export async function fetchForexPairs({ page = 1, pageSize = 20 } = {}) {
  * R:R is recomputed defensively (direction-agnostic) so bearish setups don't
  * collapse to '—' and any garbled API value is corrected.
  */
-export async function fetchForexSetups() {
-  const url = `${BASE}/dashboard/setups`
+export async function fetchForexSetups({ maxResults = 150 } = {}) {
+  const url = `${BASE}/dashboard/setups?maxResults=${maxResults}`
   const res = await fetchWithTimeout(url, 30000)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
