@@ -134,6 +134,7 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
       probability,
       confidence: s.confidence || (probability >= 80 ? 'High' : probability >= 65 ? 'Medium' : 'Low'),
       currentPrice: Number(s.currentPrice) || 0,
+      priceUpdatedAt: s.priceUpdatedAt || null,
       targetPrice: Number(s.targetPrice) || 0,
       stopLoss: Number(s.stopLoss) || 0,
       riskReward: s.riskReward != null ? String(s.riskReward) : '—',
@@ -535,6 +536,11 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
                       <div className="text-white font-medium text-xs sm:text-sm">
                         {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}
                       </div>
+                      {setup.priceUpdatedAt && (
+                        <div className="text-[10px] text-gray-500 mt-0.5">
+                          🕐 {new Date(setup.priceUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
                     </td>
                     
                     <td className="py-3 px-2 sm:px-4 hidden md:table-cell">

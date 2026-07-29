@@ -344,6 +344,11 @@ const NGXWeeklySetupsPanel = ({ onAnalyze }) => {
                     </td>
                       <td className="py-3 px-4 hidden sm:table-cell">
                         <div className="text-white font-medium text-xs sm:text-sm">{fmtNaira(s.currentPrice)}</div>
+                        {s.priceUpdatedAt && (
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                            🕐 {new Date(s.priceUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 hidden md:table-cell">
                         <div className="flex items-center gap-1"><ArrowUp className="h-3 w-3 text-green-400" />
