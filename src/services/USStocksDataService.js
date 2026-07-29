@@ -76,31 +76,9 @@ class USStocksDataService {
     }
 
     try {
-      // Fetch first page to know total, then fetch all pages
-      const first = await this.fetchStocksPage(1, 100);
-      const totalPages = first?.metadata?.totalPages || 1;
+      // Fetch top 250 stocks in 1 fast request
+      const first = await this.fetchStocksPage(1, 250);
       const stocks = [...(first?.stocks || [])];
-
-      // Fetch remaining pages so the dashboard reflects the full universe
-      // (~5000+ symbols). Pages are fetched in bounded-concurrency batches
-      // to surface the whole list without overwhelming the API.
-      if (totalPages > 1) {
-        const MAX_PAGES = 250;            // safety ceiling (~25,000 symbols, covers entire DB universe)
-        const BATCH_SIZE = 10;           // concurrent requests per batch
-        const lastPage = Math.min(totalPages, MAX_PAGES);
-        const pageNumbers = Array.from({ length: lastPage - 1 }, (_, i) => i + 2);
-
-        for (let i = 0; i < pageNumbers.length; i += BATCH_SIZE) {
-          const batch = pageNumbers.slice(i, i + BATCH_SIZE);
-          const results = await Promise.allSettled(
-            batch.map(p => this.fetchStocksPage(p, 100))
-          );
-          results.forEach(r => {
-            if (r.status === 'fulfilled') stocks.push(...(r.value?.stocks || []));
-          });
-        }
-      }
-
       const mapped = stocks.map(s => this.mapStockListItem(s));
       this.stocksCache = { data: mapped, timestamp: now, ttl: this.stocksCache.ttl };
       return mapped;

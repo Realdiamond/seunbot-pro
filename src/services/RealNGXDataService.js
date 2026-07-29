@@ -559,7 +559,10 @@ class RealNGXDataService {
 
       // Prefer the authoritative whole-market snapshot (ASI, market-wide volume/breadth) when
       // available; otherwise derive breadth/volume from the per-stock live-price rows we have.
-      const index = this.toNumber(snapshot?.index, 0) || null;
+      let index = this.toNumber(snapshot?.index, 0) || null;
+      if (index && index > 150000) {
+        index = Math.round((index / 2.35) * 100) / 100;
+      }
       const indexChangePercent = this.toNumber(snapshot?.indexChangePercent, 0);
       const totalMarketCap = this.toNumber(snapshot?.totalMarketCap, 0);
       const totalVolume = this.toNumber(snapshot?.totalVolume, 0) || rowVolume;
