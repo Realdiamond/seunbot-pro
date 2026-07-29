@@ -1,6 +1,7 @@
 import React, { useState, memo } from 'react'
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { fmtPrice, fmtVol, fmtPct, formatPair, fmt } from './utils'
+import ForexPairBadge from './ForexPairBadge'
 
 function SortTh({ col, label, sortBy, sortDir, onSort, align = 'right' }) {
   const active = sortBy === col
@@ -25,16 +26,19 @@ const PairRow = memo(function PairRow({ item, rank, selected, onSelect }) {
     >
       <td className="py-3 pl-4 pr-2 text-gray-500 text-sm">{rank}</td>
       <td className="py-3 pr-4">
-        <div>
-          <div className="text-white font-semibold text-sm">{formatPair(item.symbol)}</div>
-          <div className="text-gray-500 text-xs">
-            {item.name ?? item.symbol}
-          </div>
-          {(item.exchange || item.sector) && (
-            <div className="text-[10px] text-gray-600">
-              {[item.exchange, item.sector].filter(Boolean).join(' · ')}
+        <div className="flex items-center gap-2.5">
+          <ForexPairBadge symbol={item.symbol} size="sm" />
+          <div>
+            <div className="text-white font-semibold text-sm">{formatPair(item.symbol)}</div>
+            <div className="text-gray-500 text-xs">
+              {item.name ?? item.symbol}
             </div>
-          )}
+            {(item.exchange || item.sector) && (
+              <div className="text-[10px] text-gray-600">
+                {[item.exchange, item.sector].filter(Boolean).join(' · ')}
+              </div>
+            )}
+          </div>
         </div>
       </td>
       <td className="py-3 pr-4 text-right text-white font-mono text-sm">{fmtPrice(item.currentPrice)}</td>

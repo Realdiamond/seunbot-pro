@@ -3,6 +3,7 @@ import { Target, RefreshCw, AlertTriangle, Filter, Zap, ArrowUp, ArrowDown, Tren
 import { useNavigate } from 'react-router-dom'
 import { fetchForexSetups, triggerForexScan } from '../../services/ForexAPIService'
 import { formatPair } from './utils'
+import ForexPairBadge from './ForexPairBadge'
 
 const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
 
@@ -212,8 +213,13 @@ export default function ForexSetups() {
                     className="border-b border-gray-700 hover:bg-gray-700/30 transition-colors cursor-pointer"
                   >
                     <td className="py-3 px-4">
-                      <div className="text-white font-medium text-xs sm:text-sm">{formatPair(s.symbol)}</div>
-                      <div className="text-[10px] text-gray-400">{s.sector || 'Forex'}</div>
+                      <div className="flex items-center gap-2.5">
+                        <ForexPairBadge symbol={s.symbol} size="sm" />
+                        <div>
+                          <div className="text-white font-medium text-xs sm:text-sm">{formatPair(s.symbol)}</div>
+                          <div className="text-[10px] text-gray-400">{s.sector || 'Forex'}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <div className={`font-medium text-xs sm:text-sm ${setupTypeColor(s.setupType)}`}>{s.setupType}</div>

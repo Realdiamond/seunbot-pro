@@ -492,8 +492,17 @@ function App() {
                   <>
                     <Route path="/usstocks" element={<USStocksDashboard />} />
                     <Route path="/usstocks/:symbol" element={<USStocksSymbolAnalysis />} />
-                    <Route path="/usstocks-analysis" element={<USStocksDashboard />} />
-                    <Route path="/usstocks-setups" element={<USStocksDashboard />} />
+                    <Route path="/usstocks-analysis" element={<USStocksAdvancedAnalysis selectedStock="AAPL" />} />
+                    <Route
+                      path="/usstocks-setups"
+                      element={
+                        <USStocksWeeklySetupsPanel
+                          onAnalyze={(symbol) => {
+                            navigate(`/usstocks/${symbol}`)
+                          }}
+                        />
+                      }
+                    />
                     <Route path="/usstocks-etfs" element={<USStocksDashboard />} />
                   </>
                 )}
