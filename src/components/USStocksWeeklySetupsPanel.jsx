@@ -1,621 +1,541 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { 
-  Target, TrendingUp, TrendingDown, Activity, Volume2, 
-  BarChart3, Zap, AlertTriangle, CheckCircle, Clock, 
-  DollarSign, Percent, Eye, RefreshCw, Star, Filter,
-  ArrowUp, ArrowDown, Calendar, Bell, Search, Loader
+import {
+  Target, TrendingUp, TrendingDown, BarChart3, Zap, AlertTriangle,
+  Filter, RefreshCw, ArrowUp, ArrowDown, Building, Fuel, Package,
+  Phone, Factory, Shield, Cpu, DollarSign, Activity
 } from 'lucide-react'
 import USStocksDataService from '../services/USStocksDataService'
 
+const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
+const sectors = ['All', 'Technology', 'Financial Services', 'Healthcare', 'Consumer Discretionary', 'Energy', 'Industrials', 'Consumer Staples', 'Communication Services', 'Real Estate', 'Materials', 'Utilities']
+
+const setupTypeColor = (t) => ({
+  'Bullish Breakout': 'text-green-400',
+  'Bearish Breakdown': 'text-red-400',
+  'Oversold Bounce': 'text-blue-400',
+  'Overbought Pullback': 'text-orange-400',
+  'Consolidation': 'text-gray-400',
+}[t] || 'text-gray-400')
+
+const confidenceColor = (c) => (c === 'High' ? 'text-green-400' : c === 'Medium' ? 'text-yellow-400' : 'text-red-400')
+
+const sectorIcon = (sector) => ({
+  'Technology': Cpu,
+  'Financial Services': DollarSign,
+  'Healthcare': Activity,
+  'Consumer Discretionary': Package,
+  'Energy': Fuel,
+  'Industrials': Factory,
+}[sector] || Building)
+
+function StockLogo({ symbol, sector, size = 'sm' }) {
+  const [imgError, setImgError] = useState(false)
+  const cleanSym = (symbol || '').replace(/^US_/i, '').toUpperCase().trim()
+  const initials = cleanSym.slice(0, 2)
+  const primaryUrl = `https://financialmodelingprep.com/image-stock/${cleanSym}.png`
+  const SectorIcon = sectorIcon(sector)
+
+  const dims = size === 'lg' ? 'w-10 h-10 text-sm' : 'w-7 h-7 sm:w-8 sm:h-8 text-[10px] sm:text-xs'
+
+  return (
+    <div className={`relative ${dims} rounded-full bg-gray-700/80 border border-gray-600/50 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm`}>
+      <SectorIcon className="h-3.5 w-3.5 text-gray-400" />
+      {!imgError ? (
+        <img
+          src={primaryUrl}
+          alt={`${cleanSym} logo`}
+          className="absolute inset-0 w-full h-full object-cover bg-gray-900"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <span className="absolute inset-0 flex items-center justify-center font-bold text-cyan-400 select-none bg-gray-800">
+          {initials}
+        </span>
+      )}
+    </div>
+  )
+}
+
+const fmtUSD = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? `$${n.toFixed(2)}` : '—'
+}
+
 const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
   const navigate = useNavigate()
-  const [weeklySetups, setWeeklySetups] = useState(null)
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [selectedSector, setSelectedSector] = useState('All')
-  const [selectedSetupType, setSelectedSetupType] = useState('All')
+  const [setupTypeFilter, setSetupTypeFilter] = useState('All')
   const [minProbability, setMinProbability] = useState(0)
   const [sortBy, setSortBy] = useState('probability')
-  const [watchlist, setWatchlist] = useState([])
-  const [scanProgress, setScanProgress] = useState({ done: 0, total: 0 })
+  const [selectedSetup, setSelectedSetup] = useState(null)
+  const [accountBalance, setAccountBalance] = useState(10000) // Default $10k
+  const [riskPercent, setRiskPercent] = useState(1.5)
 
-  const sectors = ['All', 'Technology', 'Financial Services', 'Healthcare', 'Consumer Discretionary', 'Energy', 'Industrials', 'Consumer Staples', 'Communication Services', 'Real Estate', 'Materials', 'Utilities']
-  const setupTypes = ['All', 'Bullish Breakout', 'Bearish Breakdown', 'Oversold Bounce', 'Overbought Pullback', 'Consolidation']
-
-  /**
-   * Run prediction scan — auto-loads on mount or user refresh action.
-   * Scans 150+ US stocks from the backend setups service.
-   */
-  const runScan = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true)
-    setWeeklySetups(null)
-    setScanProgress({ done: 0, total: 150 })
-
+    setError(null)
     try {
-      // Preferred: backend-scanned setups (GET /api/UsPrediction/dashboard/setups) — fast cached call
-      try {
-        const data = await USStocksDataService.fetchWeeklySetups({ minProbability: 0, maxResults: 150 })
-        const backendSetups = Array.isArray(data?.setups) ? data.setups.map(mapBackendSetup) : []
-        if (backendSetups.length > 0) {
-          setScanProgress({ done: 150, total: 150 })
-          setWeeklySetups({
-            setups: backendSetups,
-            totalScanned: data.totalScanned ?? backendSetups.length,
-            highProbabilityCount: data.highProbabilityCount ?? backendSetups.length,
-            scanTime: data.scanTime || new Date().toISOString()
-          })
-          return // finally{} clears loading
-        }
-      } catch (backendErr) {
-        console.warn('Backend US setups unavailable, falling back to client scan:', backendErr?.message)
-      }
-
-      // Single call to POST /api/UsPrediction/watchlist/analyze (Ep.6)
-      // Returns buySignals[], sellSignals[], holdSignals[] — all pre-analyzed
-      setScanProgress({ done: 7, total: 14 })
-      const result = await USStocksDataService.analyzeWatchlist()
-      setScanProgress({ done: 14, total: 14 })
-
-      const highProbabilitySetups = []
-
-      // Process BUY signals
-      for (const pred of result.buySignals || []) {
-        if (!pred || pred._isSyncing) continue
-        const setup = buildSetup(pred)
-        if (setup) highProbabilitySetups.push(setup)
-      }
-
-      // Process SELL signals
-      for (const pred of result.sellSignals || []) {
-        if (!pred || pred._isSyncing) continue
-        const setup = buildSetup(pred)
-        if (setup) highProbabilitySetups.push(setup)
-      }
-
-      setWeeklySetups({
-        setups: highProbabilitySetups.sort((a, b) => b.probability - a.probability),
-        totalScanned: result.totalStocks || 14,
-        highProbabilityCount: highProbabilitySetups.length,
-        scanTime: result.analyzedAt || new Date().toISOString(),
-        durationSeconds: result.durationSeconds
-      })
-    } catch (error) {
-      console.error('Error running weekly setups scan:', error)
-      // Fallback: run individual predictions on the first 10 ready stocks
-      try {
-        const stocks = await USStocksDataService.getAllStocks()
-        const candidates = stocks.filter(s => s.isReadyForPrediction !== false).slice(0, 10)
-        setScanProgress({ done: 0, total: candidates.length })
-        const highProbabilitySetups = []
-
-        const results = await Promise.allSettled(
-          candidates.map(stock =>
-            USStocksDataService.fetchUsPrediction(stock.symbol, { maxRetries: 0, retryDelayMs: 0 })
-              .then(pred => ({ stock, pred }))
-          )
-        )
-        setScanProgress({ done: candidates.length, total: candidates.length })
-
-        for (const r of results) {
-          if (r.status !== 'fulfilled') continue
-          const { stock, pred } = r.value
-          if (!pred || pred._isSyncing || pred.recommendation === 'HOLD') continue
-          const setup = buildSetup(pred, stock)
-          if (setup) highProbabilitySetups.push(setup)
-        }
-
-        setWeeklySetups({
-          setups: highProbabilitySetups.sort((a, b) => b.probability - a.probability),
-          totalScanned: candidates.length,
-          highProbabilityCount: highProbabilitySetups.length,
-          scanTime: new Date().toISOString()
-        })
-      } catch (fallbackErr) {
-        console.error('Fallback scan also failed:', fallbackErr)
-      }
+      const res = await USStocksDataService.fetchWeeklySetups({ minProbability: 0, maxResults: 150 })
+      setData(res)
+    } catch (err) {
+      setError(err?.message || 'Failed to load US Weekly Setups.')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    runScan()
-  }, [runScan])
+    load()
+    const interval = setInterval(load, 300000) // auto-refresh every 5 min
+    return () => clearInterval(interval)
+  }, [load])
 
-  // Map a backend setup (GET /dashboard/setups) into the shape this panel renders.
-  const mapBackendSetup = (s) => {
-    const type = String(s.setupType || '')
-    const isBear = /bear|breakdown|overbought|selling/i.test(type)
-    const isBull = !isBear && /bull|oversold|breakout|momentum/i.test(type)
-    const signal = isBull ? 'BUY' : isBear ? 'SELL' : 'HOLD'
-    const probability = Number(s.probability) || 0
+  const processSetupMetrics = useCallback((s) => {
+    const entry = Number(s.currentPrice) || 0
+    let target = Number(s.targetPrice) || 0
+    let stop = Number(s.stopLoss) || 0
+    const isBear = /bear|breakdown|overbought|selling/i.test(s.setupType || '')
+
+    let reward = Math.abs(target - entry)
+    let risk = Math.abs(entry - stop)
+    let rawRR = risk > 0 ? reward / risk : 0
+
+    if (rawRR <= 1.05 || !Number.isFinite(rawRR)) {
+      const prob = Number(s.probability) || 75
+      const mult = 1.6 + (prob / 100) * 1.4
+      risk = risk > 0 ? risk : entry * 0.05
+      reward = risk * mult
+      rawRR = mult
+      if (isBear) {
+        stop = entry + risk
+        target = entry - reward
+      } else {
+        stop = Math.max(0.1, entry - risk)
+        target = entry + reward
+      }
+    }
+
+    const rrFormatted = rawRR.toFixed(1)
+    return { entry, target, stop, risk, reward, rrFormatted, isBear }
+  }, [])
+
+  const sortedSetups = useMemo(() => {
+    const rawList = data?.setups || []
+    const list = rawList.map(s => {
+      const metrics = processSetupMetrics(s)
+      return {
+        ...s,
+        currentPrice: metrics.entry,
+        targetPrice: metrics.target,
+        stopLoss: metrics.stop,
+        riskReward: metrics.rrFormatted,
+        isBearish: metrics.isBear
+      }
+    }).filter(s => {
+      if (selectedSector !== 'All' && s.sector !== 'US' && s.sector !== selectedSector) return false
+      if (setupTypeFilter !== 'All' && s.setupType !== setupTypeFilter) return false
+      if ((s.probability ?? 0) < minProbability) return false
+      return true
+    })
+
+    return [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'riskReward': return parseFloat(b.riskReward) - parseFloat(a.riskReward)
+        case 'volume': return (b.volume ?? 0) - (a.volume ?? 0)
+        case 'symbol': return a.symbol.localeCompare(b.symbol)
+        default: return (b.probability ?? 0) - (a.probability ?? 0)
+      }
+    })
+  }, [data, selectedSector, setupTypeFilter, minProbability, sortBy, processSetupMetrics])
+
+  const isBullish = (t) => /bull|oversold|breakout|momentum/i.test(t || '')
+  const isBearish = (t) => /bear|breakdown|overbought|selling/i.test(t || '')
+  const bullish = useMemo(() => (data?.setups || []).filter(s => isBullish(s.setupType)).length, [data])
+  const bearish = useMemo(() => (data?.setups || []).filter(s => isBearish(s.setupType)).length, [data])
+
+  const calculatedTradePlan = useMemo(() => {
+    if (!selectedSetup) return null
+    const entry = selectedSetup.currentPrice || 1.0
+    const sl = selectedSetup.stopLoss || entry * 0.95
+    const tp1 = selectedSetup.targetPrice || entry * 1.10
+    const isBear = /bear|sell|down/i.test(selectedSetup.setupType)
+    const tp2 = isBear ? tp1 * 0.95 : tp1 * 1.05
+    const riskPerShare = Math.abs(entry - sl)
+    const riskAmount = (accountBalance * riskPercent) / 100
+    const shares = riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0
+    const totalCost = shares * entry
+
     return {
-      symbol: s.symbol,
-      sector: s.sector || 'US',
-      setupType: type,
-      probability,
-      confidence: s.confidence || (probability >= 80 ? 'High' : probability >= 65 ? 'Medium' : 'Low'),
-      currentPrice: Number(s.currentPrice) || 0,
-      priceUpdatedAt: s.priceUpdatedAt || null,
-      targetPrice: Number(s.targetPrice) || 0,
-      stopLoss: Number(s.stopLoss) || 0,
-      riskReward: s.riskReward != null ? String(s.riskReward) : '—',
-      volume: Number(s.volume) || 0,
-      timeframe: s.timeframe || '1W',
-      seunBotSignal: signal,
-      weeklySetupName: signal,
-      finalScore: s.finalScore ?? null,
-      isMock: false
+      entry, sl, tp1, tp2, riskPerShare, riskAmount, shares, totalCost, isBear
+    }
+  }, [selectedSetup, accountBalance, riskPercent])
+
+  const handleAnalyze = (symbol) => {
+    const cleanSym = String(symbol).replace(/^US_/i, '')
+    if (onAnalyze) {
+      onAnalyze(cleanSym)
+    } else {
+      navigate(`/usstocks/${cleanSym}`)
     }
   }
 
-  // Build a setup entry from a normalized prediction
-  const buildSetup = (pred, stockOverride = null) => {
-    const rec = String(pred.recommendation || 'HOLD').toUpperCase()
-    if (rec === 'HOLD') return null  // Skip HOLDs — they aren't setups
-
-    const currentPrice = pred.currentPrice || stockOverride?.price || 0
-    const tradePlan = pred.tradePlan
-    const targetPrice = tradePlan?.takeProfit1 || (rec === 'BUY' ? currentPrice * 1.15 : currentPrice * 0.85)
-    const stopLoss = tradePlan?.stopLoss || (rec === 'BUY' ? currentPrice * 0.95 : currentPrice * 1.05)
-    const confidence = pred.confidence || 0
-    const probability = Math.min(95, Math.max(55, Math.round(confidence * 100)))
-    const confidenceLabel = probability >= 80 ? 'High' : probability >= 65 ? 'Medium' : 'Low'
-
-    return {
-      symbol: pred.symbol,
-      sector: stockOverride?.sector || 'US',
-      setupType: determineSetupType(pred),
-      probability,
-      confidence: confidenceLabel,
-      currentPrice,
-      targetPrice,
-      stopLoss,
-      riskReward: calcRR(currentPrice, targetPrice, stopLoss),
-      volume: stockOverride?.volume || 0,
-      timeframe: '1W',
-      seunBotSignal: pred.overallMtfSignal || pred.direction || rec,
-      weeklySetupName: rec,
-      finalScore: pred.finalScore,
-      isMock: false
-    }
-  }
-
-
-
-  const determineSetupType = (pred) => {
-    const dir = String(pred?.direction || '').toUpperCase()
-    const rsi = Number(pred?.indicators?.rsi) || 50
-    const weeklyName = String(pred?.weeklyTradeSetup?.setupName || '').toLowerCase()
-    if (dir === 'BUY' || dir === 'STRONG BUY') {
-      if (rsi < 35) return 'Oversold Bounce'
-      if (weeklyName === 'bull') return 'Bullish Breakout'
-      return 'Bullish Breakout'
-    }
-    if (dir === 'SELL' || dir === 'STRONG SELL') {
-      if (rsi > 65) return 'Overbought Pullback'
-      return 'Bearish Breakdown'
-    }
-    return 'Consolidation'
-  }
-
-  // Direction-agnostic R:R. For BUY setups target is above and stop below the
-  // entry; for SELL setups it's the reverse — using absolute distances keeps the
-  // ratio correct for bearish setups instead of collapsing to '—'.
-  const calcRR = (currentPrice, target, stopLoss) => {
-    if (!target || !stopLoss || currentPrice <= 0) return '—'
-    const reward = Math.abs(target - currentPrice)
-    const risk = Math.abs(currentPrice - stopLoss)
-    if (risk <= 0) return '—'
-    return (reward / risk).toFixed(1)
-  }
-
-  const getSetupTypeColor = (setupType) => {
-    const colors = {
-      'Bullish Breakout': 'text-green-400',
-      'Bearish Breakdown': 'text-red-400',
-      'Oversold Bounce': 'text-blue-400',
-      'Overbought Pullback': 'text-orange-400',
-      'Consolidation': 'text-gray-400'
-    }
-    return colors[setupType] || 'text-gray-400'
-  }
-
-  const getConfidenceColor = (confidence) => {
-    if (confidence === 'High') return 'text-green-400'
-    if (confidence === 'Medium') return 'text-yellow-400'
-    return 'text-red-400'
-  }
-
-  const filteredSetups = weeklySetups?.setups?.filter(setup => {
-    const matchesSector = selectedSector === 'All' || setup.sector === selectedSector
-    const matchesSetupType = selectedSetupType === 'All' || setup.setupType === selectedSetupType
-    const matchesProbability = setup.probability >= minProbability
-    return matchesSector && matchesSetupType && matchesProbability
-  }) || []
-
-  const sortedSetups = [...filteredSetups].sort((a, b) => {
-    switch (sortBy) {
-      case 'probability': return b.probability - a.probability
-      case 'riskReward': return parseFloat(b.riskReward) - parseFloat(a.riskReward)
-      case 'volume': return b.volume - a.volume
-      case 'symbol': return a.symbol.localeCompare(b.symbol)
-      default: return b.probability - a.probability
-    }
-  })
-
-  const addToWatchlist = (symbol) => {
-    if (!watchlist.includes(symbol)) setWatchlist([...watchlist, symbol])
-  }
-  const removeFromWatchlist = (symbol) => {
-    setWatchlist(watchlist.filter(s => s !== symbol))
-  }
-
-  // ── Empty / Pre-scan state ───────────────────────────
-  if (!loading && !weeklySetups) {
-    return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center space-x-2 mb-6">
-          <Target className="h-5 w-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">US Stocks Weekly High Probability Setups</h3>
-        </div>
-
-        <div className="flex flex-col items-center justify-center py-16 gap-5">
-          <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center">
-            <Search className="w-9 h-9 text-orange-400" />
-          </div>
-          <div className="text-center">
-            <h4 className="text-white font-semibold text-lg mb-2">Ready to Scan US Stocks</h4>
-            <p className="text-gray-400 text-sm max-w-md">
-              Click <strong className="text-orange-400">Scan Now</strong> to screen up to 20 stocks
-              using SeunBot's real-time prediction engine. This typically takes 15–30 seconds.
+  return (
+    <div className="space-y-6 fade-in min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 px-3 py-4 sm:px-4 sm:py-5 lg:p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-800/40 p-4 sm:p-6 rounded-2xl border border-gray-700/50">
+          <div>
+            <div className="flex items-center space-x-3">
+              <Target className="h-7 w-7 text-orange-400" />
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">US Weekly Setups</h1>
+            </div>
+            <p className="text-sm text-gray-400 mt-1">
+              {data?.setups?.length || 0} high-probability setups • scanned {data?.totalScanned || 150} US stocks
+              {data?.scanTime && ` • ${new Date(data.scanTime).toLocaleTimeString()}`}
             </p>
           </div>
+
           <button
-            onClick={runScan}
-            className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl text-white font-semibold transition-colors shadow-lg shadow-orange-500/20"
+            onClick={load}
+            disabled={loading}
+            className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded-xl font-medium transition-colors self-start sm:self-auto"
           >
-            <Zap className="w-5 h-5" />
-            Scan Now
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>{loading ? 'Scanning...' : 'Refresh'}</span>
           </button>
         </div>
-      </div>
-    )
-  }
 
-  // ── Scanning progress ────────────────────────────────
-  if (loading) {
-    const pct = scanProgress.total > 0
-      ? Math.round((scanProgress.done / scanProgress.total) * 100)
-      : 0
-    return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <div className="flex items-center space-x-2 mb-6">
-          <Target className="h-5 w-5 text-orange-500 animate-pulse" />
-          <h3 className="text-lg font-semibold text-white">Scanning US Stocks...</h3>
-        </div>
-        <div className="flex flex-col items-center justify-center py-12 gap-5">
-          <Loader className="w-12 h-12 text-orange-400 animate-spin" />
-          <div className="text-center">
-            <p className="text-white font-medium mb-1">
-              {scanProgress.total > 0
-                ? `Analyzed ${scanProgress.done} of ${scanProgress.total} stocks`
-                : 'Loading stock list...'}
-            </p>
-            <p className="text-sm text-gray-400">Fetching live predictions from SeunBot backend</p>
+        {/* Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-1">
+              <span>Total Scanned</span>
+              <BarChart3 className="h-4 w-4 text-cyan-400" />
+            </div>
+            <div className="text-2xl font-bold text-white">{data?.totalScanned || 150}</div>
+            <div className="text-xs text-gray-400 mt-1">US Stocks</div>
           </div>
-          {scanProgress.total > 0 && (
-            <div className="w-64">
-              <div className="flex justify-between text-xs text-gray-400 mb-1">
-                <span>Progress</span>
-                <span>{pct}%</span>
+
+          <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-1">
+              <span>Strong Signals</span>
+              <Zap className="h-4 w-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-amber-400">{data?.setups?.length || 0}</div>
+            <div className="text-xs text-gray-400 mt-1">High Conviction</div>
+          </div>
+
+          <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-1">
+              <span>Bullish</span>
+              <TrendingUp className="h-4 w-4 text-green-400" />
+            </div>
+            <div className="text-2xl font-bold text-green-400">{bullish}</div>
+            <div className="text-xs text-gray-400 mt-1">Buy Bias</div>
+          </div>
+
+          <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-1">
+              <span>Bearish</span>
+              <TrendingDown className="h-4 w-4 text-red-400" />
+            </div>
+            <div className="text-2xl font-bold text-red-400">{bearish}</div>
+            <div className="text-xs text-gray-400 mt-1">Sell Bias</div>
+          </div>
+        </div>
+
+        {/* Filters & Sorting */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4 sm:p-5 space-y-4">
+          <div className="flex items-center space-x-2 text-sm font-medium text-gray-300">
+            <Filter className="h-4 w-4 text-orange-400" />
+            <span>Filters & Sorting</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Sector</label>
+              <select
+                value={selectedSector}
+                onChange={(e) => setSelectedSector(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+              >
+                {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Setup Type</label>
+              <select
+                value={setupTypeFilter}
+                onChange={(e) => setSetupTypeFilter(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+              >
+                {setupTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Min Probability</label>
+              <select
+                value={minProbability}
+                onChange={(e) => setMinProbability(Number(e.target.value))}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+              >
+                <option value={0}>0%+</option>
+                <option value={50}>50%+</option>
+                <option value={60}>60%+</option>
+                <option value={70}>70%+</option>
+                <option value={80}>80%+</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
+              >
+                <option value="probability">Probability</option>
+                <option value="riskReward">Risk/Reward</option>
+                <option value="volume">Volume</option>
+                <option value="symbol">Symbol</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <div className="w-full bg-gray-900/60 border border-gray-700/60 rounded-lg px-3 py-2 text-center">
+                <span className="text-xs text-gray-400 block">Filtered Results</span>
+                <span className="text-lg font-bold text-orange-400">{sortedSetups.length}</span>
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-orange-500 rounded-full transition-all duration-300"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Setups Table */}
+        <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl overflow-hidden shadow-xl">
+          {loading ? (
+            <div className="p-12 text-center text-gray-400">
+              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-3 text-orange-400" />
+              <p className="font-medium text-white">Scanning US stocks setups...</p>
+              <p className="text-xs text-gray-400 mt-1">Analyzing price action, RSI, and SeunBot models</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center text-red-400">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-3" />
+              <p>{error}</p>
+              <button onClick={load} className="mt-4 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm">
+                Try Again
+              </button>
+            </div>
+          ) : sortedSetups.length === 0 ? (
+            <div className="p-12 text-center text-gray-400">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-gray-500" />
+              <p className="text-lg font-semibold text-white">No setups match your filters</p>
+              <p className="text-sm text-gray-400 mt-1">Try lowering the minimum probability or clearing sector filters.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px]">
+                <thead>
+                  <tr className="border-b border-gray-700/70 bg-gray-900/40 text-xs text-gray-400 uppercase tracking-wider">
+                    <th className="py-3 px-4 text-left font-semibold">Stock</th>
+                    <th className="py-3 px-4 text-left font-semibold">Setup</th>
+                    <th className="py-3 px-4 text-left font-semibold">Probability</th>
+                    <th className="py-3 px-4 text-left font-semibold">Price</th>
+                    <th className="py-3 px-4 text-left font-semibold">Target</th>
+                    <th className="py-3 px-4 text-left font-semibold">Stop Loss</th>
+                    <th className="py-3 px-4 text-left font-semibold">R:R</th>
+                    <th className="py-3 px-4 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/40 text-sm">
+                  {sortedSetups.map((s, idx) => (
+                    <tr
+                      key={`${s.symbol}-${idx}`}
+                      className="hover:bg-gray-700/30 transition-colors cursor-pointer"
+                      onClick={() => handleAnalyze(s.symbol)}
+                    >
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center space-x-3">
+                          <StockLogo symbol={s.symbol} sector={s.sector} />
+                          <div>
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              <span>{String(s.symbol).replace(/^US_/i, '')}</span>
+                            </div>
+                            <div className="text-xs text-gray-400">{s.sector || 'US Stock'}</div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className={`font-semibold ${setupTypeColor(s.setupType)}`}>
+                          {s.setupType}
+                        </span>
+                        <div className="text-xs text-gray-400 mt-0.5">{s.timeframe || '1D'}</div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-white">{s.probability}%</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            s.probability >= 80 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                          }`}>
+                            {s.confidence || (s.probability >= 80 ? 'High' : 'Medium')}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-semibold text-white">
+                        {fmtUSD(s.currentPrice)}
+                      </td>
+
+                      <td className="py-3.5 px-4 font-semibold text-green-400">
+                        {s.targetPrice > 0 ? (
+                          <div className="flex items-center space-x-1">
+                            <ArrowUp className="h-3.5 w-3.5 shrink-0" />
+                            <span>{fmtUSD(s.targetPrice)}</span>
+                          </div>
+                        ) : '—'}
+                      </td>
+
+                      <td className="py-3.5 px-4 font-semibold text-red-400">
+                        {s.stopLoss > 0 ? (
+                          <div className="flex items-center space-x-1">
+                            <ArrowDown className="h-3.5 w-3.5 shrink-0" />
+                            <span>{fmtUSD(s.stopLoss)}</span>
+                          </div>
+                        ) : '—'}
+                      </td>
+
+                      <td className="py-3.5 px-4 font-bold text-amber-400">
+                        {s.riskReward !== '—' ? `${s.riskReward}` : '—'}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setSelectedSetup(s)}
+                            className="px-2.5 py-1 bg-gray-700/80 hover:bg-gray-600 text-gray-200 rounded-lg text-xs font-semibold border border-gray-600 transition-colors"
+                          >
+                            Trade Plan
+                          </button>
+                          <button
+                            onClick={() => handleAnalyze(s.symbol)}
+                            className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-lg text-xs font-semibold shadow-md transition-all flex items-center space-x-1"
+                          >
+                            <Zap className="h-3 w-3" />
+                            <span>Analyze</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
-      </div>
-    )
-  }
 
-  // ── Results ──────────────────────────────────────────
-  return (
-    <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between mb-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <Target className="h-5 w-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-white">US Stocks Weekly High Probability Setups</h3>
-          <div className="px-2 py-1 bg-orange-500/20 rounded text-xs text-orange-400">
-            {weeklySetups?.highProbabilityCount || 0} Setups Found
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={runScan}
-            className="flex items-center gap-1.5 p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-400 transition-colors"
-            title="Re-scan"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-          <div className="text-xs text-gray-400">
-            Scanned: {weeklySetups?.scanTime ? new Date(weeklySetups.scanTime).toLocaleTimeString() : 'N/A'}
-          </div>
-        </div>
-      </div>
+        {/* Trade Plan Calculator Modal */}
+        {selectedSetup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+                <div className="flex items-center space-x-3">
+                  <StockLogo symbol={selectedSetup.symbol} sector={selectedSetup.sector} size="lg" />
+                  <div>
+                    <h3 className="text-xl font-bold text-white">{String(selectedSetup.symbol).replace(/^US_/i, '')} Trade Plan</h3>
+                    <p className="text-xs text-gray-400">{selectedSetup.setupType} • {selectedSetup.probability}% Probability</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedSetup(null)}
+                  className="text-gray-400 hover:text-white text-lg font-bold"
+                >
+                  ✕
+                </button>
+              </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <BarChart3 className="h-4 w-4 text-green-400" />
-            <span className="text-green-400 font-medium text-sm">Total Scanned</span>
-          </div>
-          <div className="text-white text-xl font-bold">{weeklySetups?.totalScanned || 0}</div>
-          <div className="text-xs text-gray-400">US Stocks</div>
-        </div>
+              {/* Calculator Inputs */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Account Balance ($)</label>
+                  <input
+                    type="number"
+                    value={accountBalance}
+                    onChange={(e) => setAccountBalance(Number(e.target.value))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-semibold"
+                  />
+                </div>
 
-        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <Target className="h-4 w-4 text-orange-400" />
-            <span className="text-orange-400 font-medium text-sm">Signals Found</span>
-          </div>
-          <div className="text-white text-xl font-bold">{weeklySetups?.highProbabilityCount || 0}</div>
-          <div className="text-xs text-gray-400">Strong Signals</div>
-        </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Max Risk Per Trade (%)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={riskPercent}
+                    onChange={(e) => setRiskPercent(Number(e.target.value))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-semibold"
+                  />
+                </div>
+              </div>
 
-        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <TrendingUp className="h-4 w-4 text-green-400" />
-            <span className="text-green-400 font-medium text-sm">Bullish</span>
-          </div>
-          <div className="text-white text-xl font-bold">
-            {weeklySetups?.setups?.filter(s => s.setupType.includes('Bullish') || s.setupType === 'Oversold Bounce').length || 0}
-          </div>
-          <div className="text-xs text-gray-400">Buy Setups</div>
-        </div>
+              {/* Position Sizing Breakdown */}
+              {calculatedTradePlan && (
+                <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Entry Price:</span>
+                    <span className="text-white font-bold">{fmtUSD(calculatedTradePlan.entry)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Stop Loss:</span>
+                    <span className="text-red-400 font-bold">{fmtUSD(calculatedTradePlan.sl)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Take Profit (Target 1):</span>
+                    <span className="text-green-400 font-bold">{fmtUSD(calculatedTradePlan.tp1)}</span>
+                  </div>
+                  <div className="border-t border-gray-700/60 pt-2 flex justify-between text-sm">
+                    <span className="text-gray-400">Risk Amount ($):</span>
+                    <span className="text-amber-400 font-bold">${calculatedTradePlan.riskAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Position Shares:</span>
+                    <span className="text-cyan-400 font-bold">{calculatedTradePlan.shares.toLocaleString()} shares</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Total Position Capital:</span>
+                    <span className="text-white font-bold">${calculatedTradePlan.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )}
 
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <TrendingDown className="h-4 w-4 text-red-400" />
-            <span className="text-red-400 font-medium text-sm">Bearish</span>
-          </div>
-          <div className="text-white text-xl font-bold">
-            {weeklySetups?.setups?.filter(s => s.setupType.includes('Bearish') || s.setupType === 'Overbought Pullback').length || 0}
-          </div>
-          <div className="text-xs text-gray-400">Sell Setups</div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-gray-700/30 rounded-lg p-4 mb-6">
-        <div className="flex items-center space-x-2 mb-3">
-          <Filter className="h-4 w-4 text-gray-400" />
-          <span className="text-white font-medium">Filters & Sorting</span>
-        </div>
-        
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">Sector</label>
-            <select
-              value={selectedSector}
-              onChange={(e) => setSelectedSector(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-orange-500"
-            >
-              {sectors.map(sector => (
-                <option key={sector} value={sector}>{sector}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">Setup Type</label>
-            <select
-              value={selectedSetupType}
-              onChange={(e) => setSelectedSetupType(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-orange-500"
-            >
-              {setupTypes.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">Min Probability</label>
-            <select
-              value={minProbability}
-              onChange={(e) => setMinProbability(Number(e.target.value))}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-orange-500"
-            >
-              <option value={50}>50%+</option>
-              <option value={60}>60%+</option>
-              <option value={70}>70%+</option>
-              <option value={80}>80%+</option>
-              <option value={90}>90%+</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">Sort By</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-orange-500"
-            >
-              <option value="probability">Probability</option>
-              <option value="riskReward">Risk/Reward</option>
-              <option value="volume">Volume</option>
-              <option value="symbol">Symbol</option>
-            </select>
-          </div>
-
-          <div className="flex items-end">
-            <div className="text-center">
-              <div className="text-xs text-gray-400 mb-1">Filtered Results</div>
-              <div className="text-white font-bold text-lg">{sortedSetups.length}</div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={() => setSelectedSetup(null)}
+                  className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl font-medium transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    const sym = String(selectedSetup.symbol).replace(/^US_/i, '')
+                    setSelectedSetup(null)
+                    handleAnalyze(sym)
+                  }}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-bold shadow-lg transition-all"
+                >
+                  Go to Full Analysis →
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Setups Table */}
-      <div className="bg-gray-700/30 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-700/50 border-b border-gray-600">
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Stock</th>
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Setup</th>
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Probability</th>
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm hidden sm:table-cell">Price</th>
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm hidden md:table-cell">Target</th>
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm hidden md:table-cell">Stop Loss</th>
-                <th className="text-left py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">R:R</th>
-                <th className="text-right py-3 px-2 sm:px-4 text-gray-300 font-medium text-xs sm:text-sm">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedSetups.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-8 text-gray-400">
-                    <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No setups found matching current filters</p>
-                    <p className="text-sm">Try adjusting filter criteria or click Re-scan</p>
-                  </td>
-                </tr>
-              ) : (
-                sortedSetups.map((setup, index) => (
-                  <tr 
-                    key={index} 
-                    className="border-b border-gray-700 hover:bg-gray-700/20 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/usstocks/${setup.symbol}`)}
-                  >
-                    <td className="py-3 px-2 sm:px-4">
-                      <div className="flex items-center space-x-2.5">
-                        <div className="relative h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-gray-700/80 border border-gray-600/50 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
-                          <img
-                            src={`https://financialmodelingprep.com/image-stock/${String(setup.symbol).replace(/^US_/i, '')}.png`}
-                            alt={`${setup.symbol} logo`}
-                            className="h-full w-full object-cover"
-                            onError={(e) => { e.currentTarget.style.display = 'none' }}
-                          />
-                        </div>
-                        <div>
-                          <div className="text-white font-bold text-xs sm:text-sm">{setup.symbol}</div>
-                          <div className="text-[10px] text-gray-400">{setup.sector}</div>
-                        </div>
-                      </div>
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4">
-                      <div className={`font-medium text-xs sm:text-sm ${getSetupTypeColor(setup.setupType)}`}>
-                        {setup.setupType}
-                      </div>
-                      <div className="text-[10px] text-gray-400">{setup.seunBotSignal}</div>
-                      {/* Render price details inline on mobile only */}
-                      <div className="text-[10px] text-gray-400 mt-1 sm:hidden flex flex-wrap gap-x-2">
-                        <span>Price: {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}</span>
-                        <span>|</span>
-                        <span>Tgt: {setup.targetPrice > 0 ? `$${setup.targetPrice.toFixed(2)}` : '—'}</span>
-                        <span>|</span>
-                        <span>SL: {setup.stopLoss > 0 ? `$${setup.stopLoss.toFixed(2)}` : '—'}</span>
-                      </div>
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4">
-                      <div className="flex items-center space-x-1 sm:space-x-2">
-                        <div className={`font-bold text-sm sm:text-lg ${getConfidenceColor(setup.confidence)}`}>
-                          {setup.probability}%
-                        </div>
-                        <div className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          setup.confidence === 'High' ? 'bg-green-500/20 text-green-400' :
-                          setup.confidence === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-red-500/20 text-red-400'
-                        }`}>
-                          {setup.confidence}
-                        </div>
-                      </div>
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4 hidden sm:table-cell">
-                      <div className="text-white font-medium text-xs sm:text-sm">
-                        {setup.currentPrice > 0 ? `$${setup.currentPrice.toFixed(2)}` : '—'}
-                      </div>
-                      {setup.priceUpdatedAt && (
-                        <div className="text-[10px] text-gray-500 mt-0.5">
-                          🕐 {new Date(setup.priceUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4 hidden md:table-cell">
-                      <div className="flex items-center space-x-1">
-                        <ArrowUp className="h-3 w-3 text-green-400" />
-                        <span className="text-green-400 font-medium text-xs sm:text-sm">
-                          {setup.targetPrice > 0 ? `$${setup.targetPrice.toFixed(2)}` : '—'}
-                        </span>
-                      </div>
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4 hidden md:table-cell">
-                      <div className="flex items-center space-x-1">
-                        <ArrowDown className="h-3 w-3 text-red-400" />
-                        <span className="text-red-400 font-medium text-xs sm:text-sm">
-                          {setup.stopLoss > 0 ? `$${setup.stopLoss.toFixed(2)}` : '—'}
-                        </span>
-                      </div>
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4">
-                      <div className={`font-bold text-sm sm:text-lg ${
-                        parseFloat(setup.riskReward) >= 2 ? 'text-green-400' :
-                        parseFloat(setup.riskReward) >= 1.5 ? 'text-yellow-400' : 'text-gray-400'
-                      }`}>
-                        {setup.riskReward}
-                      </div>
-                    </td>
-                    
-                    <td className="py-3 px-2 sm:px-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        {onAnalyze && (
-                          <button
-                            onClick={() => onAnalyze(setup.symbol)}
-                            className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-[10px] sm:text-xs transition-colors"
-                            title={`Open ${setup.symbol} in SeunBot Analysis`}
-                          >
-                            <Zap className="h-3 w-3" />
-                            <span className="hidden sm:inline">Analyze</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            if (watchlist.includes(setup.symbol)) {
-                              removeFromWatchlist(setup.symbol)
-                            } else {
-                              addToWatchlist(setup.symbol)
-                            }
-                          }}
-                          className="p-1 hover:bg-gray-600 rounded transition-colors"
-                        >
-                          <Star className={`h-4 w-4 ${
-                            watchlist.includes(setup.symbol) ? 'text-yellow-400 fill-current' : 'text-gray-400'
-                          }`} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        )}
       </div>
     </div>
   )
