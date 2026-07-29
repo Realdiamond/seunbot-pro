@@ -565,14 +565,12 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
                               <div className="flex items-center space-x-2 min-w-0">
                                 <div className="relative h-5 w-5 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
                                   <SectorIcon className="h-3.5 w-3.5 text-gray-400" />
-                                  {stock.imageUrl && (
-                                    <img
-                                      src={stock.imageUrl}
-                                      alt={`${stock.symbol} logo`}
-                                      className="absolute inset-0 h-full w-full object-cover"
-                                      onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                    />
-                                  )}
+                                  <img
+                                    src={stock.imageUrl || `https://financialmodelingprep.com/image-stock/${stock.symbol.replace(/^US_/i, '')}.png`}
+                                    alt={`${stock.symbol} logo`}
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                  />
                                 </div>
                                 <span className="font-medium text-white truncate">{stock.symbol}</span>
                                 {stock.type === 'ETF' && (
@@ -726,14 +724,12 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
                                 <div className="flex items-center space-x-2">
                                   <div className="relative h-6 w-6 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
                                     <SectorIcon className="h-4 w-4 text-gray-400" />
-                                    {stock.imageUrl && (
-                                      <img
-                                        src={stock.imageUrl}
-                                        alt={`${stock.symbol} logo`}
-                                        className="absolute inset-0 h-full w-full object-cover"
-                                        onError={(e) => { e.currentTarget.style.display = 'none' }}
-                                      />
-                                    )}
+                                    <img
+                                      src={stock.imageUrl || `https://financialmodelingprep.com/image-stock/${stock.symbol.replace(/^US_/i, '')}.png`}
+                                      alt={`${stock.symbol} logo`}
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                                    />
                                   </div>
                                   <div className="text-white font-medium">{stock.symbol}</div>
                                 </div>

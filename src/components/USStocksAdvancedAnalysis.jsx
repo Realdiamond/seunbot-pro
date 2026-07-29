@@ -438,7 +438,14 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData = null, st
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex flex-wrap items-center gap-2">
-          <Brain className="h-5 w-5 text-green-500 shrink-0" />
+          <div className="relative h-7 w-7 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-600">
+            <img
+              src={`https://financialmodelingprep.com/image-stock/${String(selectedStock).replace(/^US_/i, '')}.png`}
+              alt={`${selectedStock} logo`}
+              className="h-full w-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+          </div>
           <h3 className="text-base sm:text-lg font-semibold text-white">US Stocks Advanced Analysis</h3>
           <div className="flex flex-wrap items-center gap-2">
             <div className="px-2 py-1 bg-green-500/20 rounded text-xs text-green-400 font-bold whitespace-nowrap">
