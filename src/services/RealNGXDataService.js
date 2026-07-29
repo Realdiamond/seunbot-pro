@@ -687,9 +687,10 @@ class RealNGXDataService {
     try {
       const minProb = params.minProbability !== undefined ? params.minProbability : 0;
       const maxRes = params.maxResults || 150;
-      const [res, assets] = await Promise.all([
+      const [res, assets, livePrices] = await Promise.all([
         axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups?minProbability=${minProb}&maxResults=${maxRes}`, { timeout: 30000 }),
-        this.fetchAssets().catch(() => [])
+        this.fetchAssets().catch(() => []),
+        this.fetchLivePrices().catch(() => ({ bySymbol: new Map() }))
       ]);
       const data = res.data || {};
       
@@ -702,11 +703,16 @@ class RealNGXDataService {
       }
 
       const setups = Array.isArray(data.setups) ? data.setups.map(s => {
-        const currentPrice = this.toNumber(s.currentPrice, 0);
-        const targetPrice = this.toNumber(s.targetPrice, 0);
-        const stopLoss = this.toNumber(s.stopLoss, 0);
         const normSymbol = this.normalizeAssetSymbol(s.symbol);
         const assetInfo = assetMap.get(normSymbol);
+
+        // Check if there is a real-time live price from the live price feed
+        const livePriceRecord = livePrices?.bySymbol?.get(normSymbol) || null;
+        const liveFeedPrice = this.hasLivePrice(livePriceRecord) ? this.toNumber(livePriceRecord.price, 0) : 0;
+
+        const currentPrice = liveFeedPrice > 0 ? liveFeedPrice : this.toNumber(s.currentPrice, 0);
+        const targetPrice = this.toNumber(s.targetPrice, 0);
+        const stopLoss = this.toNumber(s.stopLoss, 0);
 
         return {
           ...s,
