@@ -1,30 +1,41 @@
 import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Volume2, BarChart3, Calendar, DollarSign, Activity, AlertCircle } from 'lucide-react'
 import USStocksDataService from '../services/USStocksDataService'
 import AIStockAnalysis from './AIStockAnalysis'
 
 const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData: initialStockData, stocks = [], onSelectStock }) => {
-  const [stockData, setStockData] = useState(initialStockData || null)
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('technical')
-
+  const location = useLocation()
   const cleanSym = String(selectedStock || 'AAPL').replace(/^US_/i, '').toUpperCase().trim()
+
+  // Seed immediately from: 1) prop, 2) React Router navigation state (passed from weekly setups)
+  const navState = location?.state?.stockData
+  const seed = initialStockData || (navState?.symbol === cleanSym ? navState : null)
+
+  const [stockData, setStockData] = useState(seed || null)
+  const [loading, setLoading] = useState(!seed)
+  const [activeTab, setActiveTab] = useState('technical')
 
   useEffect(() => {
     loadStockData()
   }, [selectedStock])
 
   const loadStockData = async () => {
-    setLoading(true)
+    // If we already have valid price data from the prop or nav state, don't show spinner
+    const hasSeed = seed && seed.price > 0
+    if (!hasSeed) setLoading(true)
     try {
+      // Check props stocks list first (fastest)
       if (stocks && stocks.length > 0) {
         const found = stocks.find(s => String(s.symbol).replace(/^US_/i, '').toUpperCase() === cleanSym)
-        if (found) {
+        if (found && found.price > 0) {
           setStockData(found)
+          setLoading(false)
+          return
         }
       }
 
-      // Always fetch fresh real-time data from service
+      // Fetch from service (checks cache → prediction endpoint fallback)
       const fetchedData = await USStocksDataService.fetchStockData(cleanSym)
       if (fetchedData) {
         setStockData(fetchedData)

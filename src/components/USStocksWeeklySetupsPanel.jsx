@@ -174,12 +174,27 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
     }
   }, [selectedSetup, accountBalance, riskPercent])
 
-  const handleAnalyze = (symbol) => {
+  const handleAnalyze = (symbol, setupRow = null) => {
     const cleanSym = String(symbol).replace(/^US_/i, '')
+    // Pass the setup's price data via router state so the analysis page
+    // can display the price immediately without waiting for a backend call
+    const stockData = setupRow ? {
+      symbol: cleanSym,
+      name: setupRow.name || cleanSym,
+      sector: setupRow.sector || 'US Stock',
+      price: setupRow.currentPrice || 0,
+      change: 0,
+      changePercent: setupRow.changePercent || 0,
+      high: setupRow.targetPrice || setupRow.currentPrice || 0,
+      low: setupRow.stopLoss || setupRow.currentPrice || 0,
+      volume: setupRow.volume || 0,
+      open: null,
+    } : null
+
     if (onAnalyze) {
       onAnalyze(cleanSym)
     } else {
-      navigate(`/usstocks/${cleanSym}`)
+      navigate(`/usstocks/${cleanSym}`, { state: { stockData } })
     }
   }
 
@@ -358,7 +373,7 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
                     <tr
                       key={`${s.symbol}-${idx}`}
                       className="hover:bg-gray-700/30 transition-colors cursor-pointer"
-                      onClick={() => handleAnalyze(s.symbol)}
+                      onClick={() => handleAnalyze(s.symbol, s)}
                     >
                       <td className="py-3.5 px-4">
                         <div className="flex items-center space-x-3">
@@ -425,7 +440,7 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
                             Trade Plan
                           </button>
                           <button
-                            onClick={() => handleAnalyze(s.symbol)}
+                            onClick={() => handleAnalyze(s.symbol, s)}
                             className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-lg text-xs font-semibold shadow-md transition-all flex items-center space-x-1"
                           >
                             <Zap className="h-3 w-3" />

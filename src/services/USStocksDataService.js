@@ -133,14 +133,53 @@ class USStocksDataService {
   }
 
   // ─── fetchStockData (single stock) ────────────────────────
-  // Used by WebSocket fallback / advanced analysis price bar.
+  // Used by advanced analysis price bar. First checks the cached
+  // stocks list (top 250). If not found there, falls back to the
+  // full single-stock prediction endpoint which includes currentPrice.
   async fetchStockData(symbol) {
     const normalized = this.normalizeSymbol(symbol);
     try {
+      // 1. Check the cached list first (fast path)
       const all = await this.getAllStocks();
       const found = all.find(s => s.symbol === normalized);
+      if (found && found.price > 0) return found;
+
+      // 2. Fallback: call the individual prediction endpoint which always
+      //    returns currentPrice regardless of cache state.
+      try {
+        const response = await axios.get(
+          `${this.baseUrl}/api/UsPrediction/${normalized}`,
+          { timeout: 30000 }
+        );
+        const data = response.data || {};
+        const price = this.toNumber(data.currentPrice, 0);
+        if (price > 0) {
+          return {
+            symbol: normalized,
+            name: this.cleanStockName(data.companyName || normalized),
+            exchange: 'US',
+            sector: data.sector || 'US Stock',
+            price,
+            change: this.toNumber(data.priceChange, 0),
+            changePercent: this.toNumber(data.priceChangePercent, 0),
+            volume: this.toNumber(data.volume, 0),
+            high: this.toNumber(data.high24h ?? data.high, price),
+            low: this.toNumber(data.low24h ?? data.low, price),
+            open: this.toNumber(data.open, null),
+            imageUrl: null,
+            isMock: false,
+            sources: ['UsPrediction API']
+          };
+        }
+      } catch (apiErr) {
+        // Individual endpoint unavailable or returned non-200 — continue to stub
+        console.warn(`fetchStockData fallback failed for ${normalized}:`, apiErr?.message);
+      }
+
+      // 3. Return found entry even if price is 0 (better than nothing)
       if (found) return found;
-      // Not found — build minimal stub
+
+      // 4. Absolute last resort stub
       return {
         symbol: normalized, name: normalized, exchange: 'US', sector: 'US',
         price: 0, change: 0, changePercent: 0, volume: 0, high: 0, low: 0,
