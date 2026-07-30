@@ -16,7 +16,6 @@ const ForexDashboard   = lazy(() => import('./components/forex/ForexDashboard'))
 const ForexAnalysis    = lazy(() => import('./components/forex/ForexAnalysis'))
 const ForexSetups      = lazy(() => import('./components/forex/ForexSetups'))
 const USStocksDashboard = lazy(() => import('./components/USStocksDashboard'))
-const USStocksAdvancedAnalysis = lazy(() => import('./components/USStocksAdvancedAnalysis'))
 const USStocksWeeklySetupsPanel = lazy(() => import('./components/USStocksWeeklySetupsPanel'))
 
 // Computes real trading-session status per market from the current UTC time, replacing the
@@ -136,6 +135,7 @@ function App() {
   const [selectedCryptoPair, setSelectedCryptoPair] = useState('BTCUSDT')
   const [selectedForexPair, setSelectedForexPair] = useState('AUDCAD')
   const [selectedNgxStock, setSelectedNgxStock] = useState('GTCO')
+  const [selectedUsStock, setSelectedUsStock] = useState('AAPL')
   const [greeting, setGreeting] = useState(getGreeting())
 
   // Update greeting if the hour flips while the app is open
@@ -489,20 +489,29 @@ function App() {
                 {/* US Stocks Routes */}
                 {hasUsStocks && (
                   <>
-                    <Route path="/usstocks" element={<USStocksDashboard />} />
+                    <Route path="/usstocks" element={<USStocksDashboard onSelectPair={setSelectedUsStock} initialSymbol={selectedUsStock} />} />
                     <Route path="/usstocks/:symbol" element={<USStocksSymbolAnalysis />} />
-                    <Route path="/usstocks-analysis" element={<USStocksAdvancedAnalysis selectedStock="AAPL" />} />
+                    <Route
+                      path="/usstocks-analysis"
+                      element={
+                        <USStocksDashboard
+                          onSelectPair={setSelectedUsStock}
+                          initialSymbol={selectedUsStock}
+                        />
+                      }
+                    />
                     <Route
                       path="/usstocks-setups"
                       element={
                         <USStocksWeeklySetupsPanel
                           onAnalyze={(symbol) => {
+                            setSelectedUsStock(symbol)
                             navigate(`/usstocks/${symbol}`)
                           }}
                         />
                       }
                     />
-                    <Route path="/usstocks-etfs" element={<USStocksDashboard />} />
+                    <Route path="/usstocks-etfs" element={<USStocksDashboard onSelectPair={setSelectedUsStock} initialSymbol={selectedUsStock} />} />
                   </>
                 )}
 
