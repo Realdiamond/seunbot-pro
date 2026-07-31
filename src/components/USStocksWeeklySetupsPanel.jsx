@@ -79,7 +79,7 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await USStocksDataService.fetchWeeklySetups({ minProbability: 0, maxResults: 150 })
+      const res = await USStocksDataService.fetchWeeklySetups({ minProbability: 0, maxResults: 500 })
       setData(res)
     } catch (err) {
       setError(err?.message || 'Failed to load US Weekly Setups.')

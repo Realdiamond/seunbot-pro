@@ -5,9 +5,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchForexPairs } from '../services/ForexAPIService'
 
-// 15 min — matches ForexLivePricePollingService refresh cadence.
-// 304 Not Modified is returned when scanner hasn't re-run, so repeat polls are ~200 bytes.
-const REFRESH_MS = 15 * 60 * 1000
+// 5 min — polls more frequently to pick up backend scanner refreshes sooner.
+// 304 Not Modified returned when data unchanged, so repeat polls are very cheap.
+const REFRESH_MS = 5 * 60 * 1000
 
 export function useForexPairs(page = 1, pageSize = 20) {
   const [data, setData] = useState(null)

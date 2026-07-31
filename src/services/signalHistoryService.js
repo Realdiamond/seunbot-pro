@@ -57,8 +57,14 @@ export async function fetchSignalHistory(market, symbol, count = 20) {
     const rows = Array.isArray(res.data) ? res.data.map(normalizeRow) : [];
     // Newest first.
     rows.sort((a, b) => new Date(b.predictedAt || 0) - new Date(a.predictedAt || 0));
-    cache.set(cacheKey, { data: rows, t: Date.now() });
-    return rows;
+    // Only surface predictions from the last 30 days — anything older is stale and misleading.
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const recent = rows.filter(r => {
+      if (!r.predictedAt) return false;
+      return new Date(r.predictedAt).getTime() >= cutoff;
+    });
+    cache.set(cacheKey, { data: recent, t: Date.now() });
+    return recent;
   } catch (err) {
     console.warn(`Signal history unavailable for ${market}/${symbol}:`, err?.message);
     return [];

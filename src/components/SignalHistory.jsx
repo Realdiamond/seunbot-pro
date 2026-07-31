@@ -46,7 +46,7 @@ export default function SignalHistory({ market, symbol, title = 'Signal History'
 
       {rows.length === 0 ? (
         <p className="text-gray-500 text-sm">
-          {loading ? 'Loading history…' : 'No prediction history yet for this asset.'}
+          {loading ? 'Loading history…' : 'No recent predictions in the last 30 days for this asset.'}
         </p>
       ) : (
         <div className="overflow-x-auto">

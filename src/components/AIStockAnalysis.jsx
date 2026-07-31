@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, Target, Brain, Star, RefreshCw, DollarSign, Activity, BarChart3, Shield, Clock, Zap, Globe, Newspaper } from 'lucide-react';
 import AIAnalysisEndpointService from '../services/AIAnalysisEndpointService';
 
-const AIStockAnalysis = ({ stock }) => {
+const AIStockAnalysis = ({ stock, currency = '₦' }) => {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -132,7 +132,7 @@ const AIStockAnalysis = ({ stock }) => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm text-gray-400">Current Price {analysis.webDataUsed && '(Web-Verified)'}</div>
-              <div className="text-2xl font-bold text-white">₦{analysis.currentPrice.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-white">{currency}{analysis.currentPrice.toFixed(2)}</div>
             </div>
               <div className="text-left sm:text-right">
               <div className="text-sm text-gray-400">Daily Change</div>
@@ -214,7 +214,7 @@ const AIStockAnalysis = ({ stock }) => {
             <span className="text-xs text-gray-400">Price Target</span>
           </div>
           <div className="text-lg font-semibold text-white">
-            ₦{analysis.priceTarget.toFixed(2)}
+            {currency}{analysis.priceTarget.toFixed(2)}
           </div>
           <div className="text-xs text-gray-400">
             {targetUpside.toFixed(1)}% upside
@@ -240,15 +240,15 @@ const AIStockAnalysis = ({ stock }) => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <div className="text-xs text-gray-400 mb-1">Entry Point</div>
-              <div className="text-lg font-semibold text-green-400">₦{analysis.entryPoint.toFixed(2)}</div>
+              <div className="text-lg font-semibold text-green-400">{currency}{analysis.entryPoint.toFixed(2)}</div>
             </div>
             <div>
               <div className="text-xs text-gray-400 mb-1">Price Target</div>
-              <div className="text-lg font-semibold text-blue-400">₦{analysis.priceTarget.toFixed(2)}</div>
+              <div className="text-lg font-semibold text-blue-400">{currency}{analysis.priceTarget.toFixed(2)}</div>
             </div>
             <div>
               <div className="text-xs text-gray-400 mb-1">Stop Loss</div>
-              <div className="text-lg font-semibold text-red-400">₦{analysis.stopLoss.toFixed(2)}</div>
+              <div className="text-lg font-semibold text-red-400">{currency}{analysis.stopLoss.toFixed(2)}</div>
             </div>
           </div>
         </div>
@@ -264,23 +264,23 @@ const AIStockAnalysis = ({ stock }) => {
           <div className="space-y-3">
             <div className="flex items-center justify-between p-2 bg-red-500/10 rounded">
               <span className="text-sm text-gray-300">Strong Resistance</span>
-              <span className="text-sm font-semibold text-red-400">₦{analysis.keyLevels.strongResistance.toFixed(2)}</span>
+              <span className="text-sm font-semibold text-red-400">{currency}{analysis.keyLevels.strongResistance.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-red-500/5 rounded">
               <span className="text-sm text-gray-300">Weak Resistance</span>
-              <span className="text-sm font-semibold text-red-300">₦{analysis.keyLevels.weakResistance.toFixed(2)}</span>
+              <span className="text-sm font-semibold text-red-300">{currency}{analysis.keyLevels.weakResistance.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded border-2 border-blue-500/30">
               <span className="text-sm text-gray-300">Current Price</span>
-              <span className="text-sm font-bold text-blue-400">₦{analysis.currentPrice.toFixed(2)}</span>
+              <span className="text-sm font-bold text-blue-400">{currency}{analysis.currentPrice.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-green-500/5 rounded">
               <span className="text-sm text-gray-300">Weak Support</span>
-              <span className="text-sm font-semibold text-green-300">₦{analysis.keyLevels.weakSupport.toFixed(2)}</span>
+              <span className="text-sm font-semibold text-green-300">{currency}{analysis.keyLevels.weakSupport.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-green-500/10 rounded">
               <span className="text-sm text-gray-300">Strong Support</span>
-              <span className="text-sm font-semibold text-green-400">₦{analysis.keyLevels.strongSupport.toFixed(2)}</span>
+              <span className="text-sm font-semibold text-green-400">{currency}{analysis.keyLevels.strongSupport.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -379,9 +379,9 @@ const AIStockAnalysis = ({ stock }) => {
                 <div className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wide">Mean Reversion · Bollinger Bands</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                   <div><span className="text-gray-500">Status </span><span className="text-gray-200">{analysis.hybridComponents.meanReversion.bollingerBands}</span></div>
-                  <div><span className="text-gray-500">Upper </span><span className="text-gray-200">₦{Number(analysis.hybridComponents.meanReversion.bollingerUpper).toFixed(2)}</span></div>
-                  <div><span className="text-gray-500">Middle </span><span className="text-gray-200">₦{Number(analysis.hybridComponents.meanReversion.bollingerMiddle).toFixed(2)}</span></div>
-                  <div><span className="text-gray-500">Lower </span><span className="text-gray-200">₦{Number(analysis.hybridComponents.meanReversion.bollingerLower).toFixed(2)}</span></div>
+                  <div><span className="text-gray-500">Upper </span><span className="text-gray-200">{currency}{Number(analysis.hybridComponents.meanReversion.bollingerUpper).toFixed(2)}</span></div>
+                  <div><span className="text-gray-500">Middle </span><span className="text-gray-200">{currency}{Number(analysis.hybridComponents.meanReversion.bollingerMiddle).toFixed(2)}</span></div>
+                  <div><span className="text-gray-500">Lower </span><span className="text-gray-200">{currency}{Number(analysis.hybridComponents.meanReversion.bollingerLower).toFixed(2)}</span></div>
                   {analysis.hybridComponents.meanReversion.zScore !== undefined && (
                     <div><span className="text-gray-500">Z-Score </span><span className={`font-medium ${ analysis.hybridComponents.meanReversion.zScoreStatus === 'Overbought' ? 'text-red-400' : analysis.hybridComponents.meanReversion.zScoreStatus === 'Oversold' ? 'text-green-400' : 'text-gray-200'}`}>{Number(analysis.hybridComponents.meanReversion.zScore).toFixed(2)} ({analysis.hybridComponents.meanReversion.zScoreStatus})</span></div>
                   )}

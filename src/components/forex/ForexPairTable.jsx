@@ -54,8 +54,24 @@ const PairRow = memo(function PairRow({ item, rank, selected, onSelect }) {
         <div className="text-gray-300">{fmtPrice(item.high24h)}</div>
         <div>{fmtPrice(item.low24h)}</div>
       </td>
-      <td className="py-3 pr-4 text-right text-gray-500 text-xs">
-        {item.lastUpdated ? new Date(item.lastUpdated).toLocaleDateString() : '—'}
+      <td className="py-3 pr-4 text-right text-xs">
+        {(() => {
+          if (!item.lastUpdated) return <span className="text-gray-600">—</span>
+          const d = new Date(item.lastUpdated)
+          if (isNaN(d.getTime())) return <span className="text-gray-600">—</span>
+          const ageMins = (Date.now() - d.getTime()) / 60000
+          if (ageMins < 60) return <span className="text-green-400 font-medium">Live</span>
+          if (ageMins < 1440) {
+            const h = Math.floor(ageMins / 60)
+            return <span className="text-gray-400">{h}h ago</span>
+          }
+          const days = Math.floor(ageMins / 1440)
+          return (
+            <span className="text-amber-500" title={d.toLocaleDateString()}>
+              Stale ({days}d)
+            </span>
+          )
+        })()}
       </td>
     </tr>
   )

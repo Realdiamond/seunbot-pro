@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Volume2, BarChart3, Calendar, DollarSign, Activity, AlertCircle } from 'lucide-react'
 import USStocksDataService from '../services/USStocksDataService'
 import AIStockAnalysis from './AIStockAnalysis'
+import USStocksAdvancedAnalysisPanel from './USStocksAdvancedAnalysisPanel'
 
 const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData: initialStockData, stocks = [], onSelectStock }) => {
   const location = useLocation()
@@ -156,23 +157,31 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData: initialSt
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="grid grid-cols-2 bg-gray-800 rounded-lg p-1 gap-1">
+      {/* Tab Navigation - 3 tabs */}
+      <div className="grid grid-cols-3 bg-gray-800 rounded-lg p-1 gap-1">
         <button
           onClick={() => setActiveTab('technical')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`px-3 py-2 rounded-md text-xs font-medium transition-colors ${
             activeTab === 'technical' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
-          Technical Analysis
+          Technical
         </button>
         <button
           onClick={() => setActiveTab('ai')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`px-3 py-2 rounded-md text-xs font-medium transition-colors ${
             activeTab === 'ai' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
           AI Analysis
+        </button>
+        <button
+          onClick={() => setActiveTab('advanced')}
+          className={`px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+            activeTab === 'advanced' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          SMC / Wave
         </button>
       </div>
 
@@ -247,7 +256,17 @@ const USStocksAdvancedAnalysis = ({ selectedStock = 'AAPL', stockData: initialSt
       )}
 
       {activeTab === 'ai' && (
-        <AIStockAnalysis stock={stockData || { symbol: cleanSym, name: cleanSym, price: currentPrice, changePercent }} />
+        <AIStockAnalysis
+          stock={stockData || { symbol: cleanSym, name: cleanSym, price: currentPrice, changePercent }}
+          currency="$"
+        />
+      )}
+
+      {activeTab === 'advanced' && (
+        <USStocksAdvancedAnalysisPanel
+          selectedStock={cleanSym}
+          marketData={stocks}
+        />
       )}
     </div>
   )
