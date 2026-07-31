@@ -209,7 +209,7 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
               <h1 className="text-2xl sm:text-3xl font-bold text-white">US Weekly Setups</h1>
             </div>
             <p className="text-sm text-gray-400 mt-1">
-              {data?.setups?.length || 0} high-probability setups • scanned {data?.totalScanned || 150} US stocks
+              {data?.setups?.length || 0} high-probability setups • scanned {data?.totalScanned ?? data?.setups?.length ?? 0} US stocks
               {data?.scanTime && ` • ${new Date(data.scanTime).toLocaleTimeString()}`}
             </p>
           </div>
@@ -231,7 +231,7 @@ const USStocksWeeklySetupsPanel = ({ onAnalyze }) => {
               <span>Total Scanned</span>
               <BarChart3 className="h-4 w-4 text-cyan-400" />
             </div>
-            <div className="text-2xl font-bold text-white">{data?.totalScanned || 150}</div>
+            <div className="text-2xl font-bold text-white">{data?.totalScanned ?? data?.setups?.length ?? 0}</div>
             <div className="text-xs text-gray-400 mt-1">US Stocks</div>
           </div>
 
