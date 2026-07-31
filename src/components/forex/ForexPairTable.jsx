@@ -54,21 +54,6 @@ const PairRow = memo(function PairRow({ item, rank, selected, onSelect }) {
         <div className="text-gray-300">{fmtPrice(item.high24h)}</div>
         <div>{fmtPrice(item.low24h)}</div>
       </td>
-      <td className="py-3 pr-4 text-right text-xs">
-        {(() => {
-          if (!item.currentPrice || item.currentPrice === 0) return <span className="text-gray-600">—</span>
-          if (!item.lastUpdated) return <span className="text-emerald-400 font-medium">Active</span>
-          const d = new Date(item.lastUpdated)
-          if (isNaN(d.getTime())) return <span className="text-emerald-400 font-medium">Active</span>
-          const ageMins = (Date.now() - d.getTime()) / 60000
-          if (ageMins < 60) return <span className="text-green-400 font-medium">Live</span>
-          if (ageMins < 1440) {
-            const h = Math.floor(ageMins / 60)
-            return <span className="text-gray-400">{h}h ago</span>
-          }
-          return <span className="text-emerald-400/90 font-medium">Active</span>
-        })()}
-      </td>
     </tr>
   )
 })
@@ -92,14 +77,13 @@ export default function ForexPairTable({ rows, loading, sortBy, sortDir, onSort,
             <SortTh col="priceChange24h" label="24h Δ" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
             <SortTh col="volume24h" label="Volume" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
             <th className="py-3 pr-4 text-right text-xs text-gray-400 font-semibold uppercase tracking-wider">High / Low</th>
-            <SortTh col="lastUpdated" label="Updated" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
           {loading
             ? Array(10).fill(null).map((_, i) => (
                 <tr key={i}>
-                  {Array(8).fill(null).map((_, j) => (
+                  {Array(7).fill(null).map((_, j) => (
                     <td key={j} className="py-4 px-4"><div className="skeleton rounded-lg h-4 w-full" /></td>
                   ))}
                 </tr>
@@ -116,7 +100,7 @@ export default function ForexPairTable({ rows, loading, sortBy, sortDir, onSort,
           }
           {!loading && rows.length === 0 && (
             <tr>
-              <td colSpan={8} className="text-center py-16 text-gray-500">No pairs found</td>
+              <td colSpan={7} className="text-center py-16 text-gray-500">No pairs found</td>
             </tr>
           )}
         </tbody>
