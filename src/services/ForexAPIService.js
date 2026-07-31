@@ -51,8 +51,8 @@ export async function fetchForexPairs({ page = 1, pageSize = 20 } = {}) {
  * R:R is recomputed defensively (direction-agnostic) so bearish setups don't
  * collapse to '—' and any garbled API value is corrected.
  */
-export async function fetchForexSetups({ maxResults = 150 } = {}) {
-  const url = `${BASE}/dashboard/setups?maxResults=${maxResults}`
+export async function fetchForexSetups({ maxResults = 500, minProbability = 0 } = {}) {
+  const url = `${BASE}/dashboard/setups?minProbability=${minProbability}&maxResults=${maxResults}`
   const data = await etagFetch(url)
   const num = (v, f = 0) => (Number.isFinite(Number(v)) ? Number(v) : f)
   const setups = Array.isArray(data?.setups) ? data.setups.map((s) => {

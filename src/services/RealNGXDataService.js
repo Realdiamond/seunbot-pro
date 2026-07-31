@@ -689,7 +689,7 @@ class RealNGXDataService {
   async fetchWeeklySetups(params = {}) {
     try {
       const minProb = params.minProbability !== undefined ? params.minProbability : 0;
-      const maxRes = params.maxResults || 150;
+      const maxRes = params.maxResults || 500;
       const [res, assets, livePrices] = await Promise.all([
         axios.get(`${this.assetsApiBaseUrl}/api/NGXAnalysis/dashboard/setups?minProbability=${minProb}&maxResults=${maxRes}`, { timeout: 30000 }),
         this.fetchAssets().catch(() => []),

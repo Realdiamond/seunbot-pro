@@ -450,7 +450,7 @@ class USStocksDataService {
 
   // ─── GET /api/UsPrediction/dashboard/setups ─
   // Backend-scanned US weekly high-probability setups (mirrors the NGX setups endpoint).
-  async fetchWeeklySetups({ minProbability = 60, maxResults = 50 } = {}) {
+  async fetchWeeklySetups({ minProbability = 0, maxResults = 500 } = {}) {
     const response = await axios.get(
       `${this.baseUrl}/api/UsPrediction/dashboard/setups`,
       { params: { minProbability, maxResults }, timeout: 60000 }

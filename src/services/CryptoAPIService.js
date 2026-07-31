@@ -46,7 +46,7 @@ export async function fetchCryptoDashboard() {
  * Returns { setups, totalScanned, highProbabilityCount, scanTime }.
  * Falls back to the old signals/ranking approach if the new endpoint fails.
  */
-export async function fetchCryptoSetups({ page = 1, pageSize = 25, minProbability = 50, maxResults = 150 } = {}) {
+export async function fetchCryptoSetups({ page = 1, pageSize = 25, minProbability = 0, maxResults = 500 } = {}) {
   const bust = `_ts=${Date.now()}`
   
   // Try the new backend-scanned setups endpoint first (GET /api/CryptoAnalysis/dashboard/setups)
