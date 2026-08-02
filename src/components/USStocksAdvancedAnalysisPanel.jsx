@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import {
   Activity, Volume2, BarChart3, Zap, Target, CheckCircle,
   Clock, RefreshCw, Waves, Triangle, Compass
@@ -59,17 +59,145 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
     } catch { setSrc("Unavailable") }
   }
 
+  const generateUSGeometricPatterns = (stockData) => {
+    const p = Number(stockData?.price || 0)
+    const chg = Number(stockData?.changePercent || 0)
+    const vol = Number(stockData?.volume || 0)
+    const sector = stockData?.sector || "US Stock"
+
+    const patterns = {
+      triangles: [],
+      channels: [],
+      flags: [],
+      us_patterns: []
+    }
+
+    if ((sector.includes("Financ") || sector.includes("Tech") || sector === "US Stock") && Math.abs(chg) > 1.5) {
+      patterns.us_patterns.push({
+        type: "Fed Policy & Rate Sensitivity Pattern",
+        description: "US equity reaction to Federal Reserve monetary stance & CPI inflation expectations",
+        reliability: "High",
+        target: p * (chg > 0 ? 1.08 : 0.92),
+        catalyst: "FOMC Rate Decisions & Inflation Data",
+        probability: 86,
+        timeframe: "1W"
+      })
+    }
+
+    if (vol > 5000000) {
+      patterns.us_patterns.push({
+        type: "Wall Street Institutional Accumulation",
+        description: "13F Institutional fund accumulation & high-volume liquidity sweep",
+        reliability: "Very High",
+        target: p * 1.10,
+        catalyst: "Institutional Order Block & Algorithmic Execution",
+        probability: 88,
+        timeframe: "1D"
+      })
+    }
+
+    if (Math.abs(chg) > 2.5) {
+      patterns.us_patterns.push({
+        type: "Quarterly Earnings Momentum Pattern",
+        description: "Wall Street earnings surprise acceleration & guidance revision trend",
+        reliability: "High",
+        target: p * (chg > 0 ? 1.07 : 0.93),
+        catalyst: "10-Q/10-K Earnings & Revenue Beats",
+        probability: 84,
+        timeframe: "1W"
+      })
+    }
+
+    if (Math.abs(chg) < 2) {
+      patterns.triangles.push({
+        type: "US Ascending Triangle",
+        pattern: "Bullish Continuation",
+        resistance: p * 1.025,
+        support: p * 0.975,
+        breakoutTarget: p * 1.06,
+        probability: 75,
+        completion: "68%",
+        context: "Wall Street institutional accumulation pattern",
+        timeframe: selTf
+      })
+    }
+
+    patterns.channels.push({
+      type: "US Ascending Channel",
+      pattern: "Bullish Trend Continuation",
+      upperBound: p * 1.03,
+      lowerBound: p * 0.97,
+      target: p * 1.08,
+      probability: 78,
+      context: "Following S&P 500 / NASDAQ uptrend continuation"
+    })
+
+    if (Math.abs(chg) > 2) {
+      patterns.flags.push({
+        type: chg > 0 ? "US Bull Flag" : "US Bear Flag",
+        pattern: "Continuation Pattern",
+        flagPole: Math.abs(chg),
+        target: p * (chg > 0 ? 1.06 : 0.94),
+        probability: 80,
+        context: "Strong US institutional momentum"
+      })
+    }
+
+    return patterns
+  }
+
+  const generateUSCycleAnalysis = (stockData) => ({
+    us_cycles: {
+      economic_cycle: "US GDP growth cycle positioning & Fed monetary stance",
+      fed_cycle: "Federal Reserve interest rate policy cycle & balance sheet QT/QE",
+      presidential_cycle: "US 4-Year presidential election cycle market trends",
+      earnings_cycle: "S&P 500 quarterly earnings release calendar alignment"
+    },
+    seasonal_patterns: {
+      q4_rally: "Santa Claus Rally (Nov-Dec year-end institutional performance)",
+      january_effect: "Small-cap and growth stock early Q1 momentum",
+      sell_in_may: "May to October seasonal consolidation pattern",
+      earnings_season: "Quarterly earnings catalyst volatility timing windows"
+    },
+    market_cycles: {
+      us_bull_bear: "S&P 500 / NASDAQ bull-bear market cycle phase",
+      sector_rotation: "US Sector rotation dynamics (Tech / Financials / Energy)",
+      institutional_flow_cycles: "13F quarterly filing & ETF creation/redemption flow patterns",
+      liquidity_cycles: "US market liquidity and NYSE/NASDAQ trading volume cycles"
+    },
+    time_analysis: {
+      best_trading_hours: "Optimal US session volatility (9:30 AM - 10:30 AM EST)",
+      monthly_patterns: "Month-end institutional rebalancing & options expiration",
+      fomc_calendar: "Federal Reserve FOMC meeting announcement cycles"
+    },
+    cycle_position: {
+      current_phase: "Mid-cycle expansion",
+      phase_duration: "8 months",
+      next_phase: "Late cycle peak",
+      probability: 78
+    }
+  })
+
   const run = async (dead) => {
     setLoading(true)
     try {
       const stock = sd || await USStocksDataService.fetchStockData(selectedStock)
-      const ai = await AIAnalysisEndpointService.analyzeStock({ symbol: selectedStock, price: stock?.price }).catch(() => null)
+      const cleanSym = String(selectedStock).replace(/^US_/i, '').toUpperCase()
+      const assetName = stock?.name || cleanSym
+
+      const [ai, compReport] = await Promise.all([
+        AIAnalysisEndpointService.analyzeStock({ symbol: cleanSym, price: stock?.price }).catch(() => null),
+        AIAnalysisEndpointService.fetchComprehensiveReport(cleanSym, assetName, 'US').catch(() => null)
+      ])
       if (dead()) return
+
       const inst = ai?.hybridComponents?.institutional || {}
       const regime = ai?.hybridComponents?.regime || {}
       const vol = ai?.hybridComponents?.volume || {}
       const p = Number(stock?.price || 0)
+
       setAnalysis({
+        compReport,
         smartMoney: {
           structure: inst.breakOfStructure || "Neutral",
           fvg: inst.fairValueGaps || "None",
@@ -78,11 +206,7 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
           confidence: (ai?.confidence||3)*20,
           src: ai?.hybridComponents ? "Hybrid AI API" : "Unavailable"
         },
-        patterns: {
-          triangles: Math.abs(stock?.changePercent||0)<2 ? [{ type:"Ascending Triangle", pattern:"Bullish Continuation", breakoutTarget: p*1.06, probability:72 }] : [],
-          channels: [{ type:"Ascending Channel", pattern:"Bullish Trend", probability:78 }],
-          flags: Math.abs(stock?.changePercent||0)>3 ? [{ type:(stock?.changePercent||0)>0?"Bull Flag":"Bear Flag", pattern:"Continuation", target:p*((stock?.changePercent||0)>0?1.06:0.94), probability:80 }] : []
-        },
+        patterns: generateUSGeometricPatterns(stock),
         ew: {
           wave: (inst.elliottWave||"?").replace(/\D/g,"")||"?",
           type: ai?.hybridDirection==="bullish"?"Impulse Wave":"Corrective Wave",
@@ -121,21 +245,7 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
             "Sector Cycle":`${stock?.sector||"US"} in current economic cycle`
           }
         },
-        cycle: {
-          us: {
-            "Economic Cycle":"US GDP growth cycle positioning",
-            "Fed Cycle":"Federal Reserve rate cycle impact",
-            "Presidential Cycle":"US 4-year election cycle patterns",
-            "Earnings Cycle":"S&P 500 quarterly earnings alignment"
-          },
-          seasonal: {
-            "Q4 Rally":"Santa Claus rally (Nov-Dec tendency)",
-            "January Effect":"Small-cap outperformance in January",
-            "Sell in May":"May-October seasonal weakness pattern",
-            "Earnings Season":"Quarterly catalyst timing windows"
-          },
-          pos: { phase:"Mid-cycle expansion", dur:"~8 months", conf:75 }
-        },
+        cycle: generateUSCycleAnalysis(stock),
         gann: {
           sq: { cur: Math.floor(Math.sqrt(p))**2, next: Math.ceil(Math.sqrt(p))**2 },
           angles: [{angle:"1x1",val:p*1.0625},{angle:"2x1",val:p*1.125},{angle:"1x2",val:p*0.9375}],
@@ -238,23 +348,79 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
         </div>
       )}
 
-      {activeTab==="patterns" && analysis && (
-        <div className="glass-effect rounded-xl p-5 space-y-4">
-          <h4 className="font-semibold text-white flex items-center gap-2"><Triangle className="h-4 w-4 text-yellow-400" />Chart Patterns</h4>
-          {[{label:"Triangles",data:analysis.patterns.triangles},{label:"Channels",data:analysis.patterns.channels},{label:"Flags",data:analysis.patterns.flags}].map(({label,data}) =>
-            data.length>0 && (
-              <div key={label}>
-                <h5 className="text-xs text-gray-400 uppercase font-semibold mb-2">{label}</h5>
-                {data.map((pt,i) => (
-                  <div key={i} className="bg-gray-700/30 rounded-lg p-3 mb-2 text-xs">
-                    <div className="flex justify-between mb-1"><span className="text-white font-medium">{pt.type}</span>{pt.probability&&<span className="text-green-400">{pt.probability}% prob.</span>}</div>
-                    {pt.pattern&&<div className="text-gray-400">{pt.pattern}</div>}
-                    {pt.breakoutTarget&&<div className="text-blue-300">Target: {fmtP(pt.breakoutTarget)}</div>}
+      {activeTab === "patterns" && analysis && (
+        <div className="space-y-4">
+          {/* AI Comprehensive Report Patterns Section */}
+          {analysis.compReport?.patterns && (
+            <div className="bg-gray-800/30 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3 flex items-center">
+                <Triangle className="h-4 w-4 mr-2 text-blue-400" />
+                {analysis.compReport.patterns.heading}
+                <span className="ml-auto text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded">Seun Weekly Bot</span>
+              </h4>
+              <div className="space-y-2">
+                {analysis.compReport.patterns.bullets.map((bullet, i) => (
+                  <div key={i} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                    bullet.startsWith('  ·') ? 'pl-6 text-gray-400 text-xs' : 'bg-blue-500/5 border border-blue-500/10 text-gray-200'
+                  }`}>
+                    {!bullet.startsWith('  ·') && <span className="text-blue-400 mt-0.5 shrink-0">▸</span>}
+                    <span>{bullet}</span>
                   </div>
                 ))}
               </div>
-            )
+            </div>
           )}
+
+          {/* US Specific Market Patterns */}
+          {analysis.patterns?.us_patterns && analysis.patterns.us_patterns.length > 0 && (
+            <div className="glass-effect rounded-xl p-5">
+              <h5 className="text-xs text-blue-400 font-semibold uppercase mb-3">US Market Specific Patterns</h5>
+              <div className="space-y-2">
+                {analysis.patterns.us_patterns.map((pt, i) => (
+                  <div key={i} className="bg-gray-700/30 rounded-lg p-3 text-xs">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-white font-medium text-sm">{pt.type}</span>
+                      <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded font-semibold">{pt.probability}% prob.</span>
+                    </div>
+                    <div className="text-gray-300 mb-2">{pt.description}</div>
+                    <div className="grid grid-cols-2 gap-2 text-gray-400 border-t border-gray-700/40 pt-2">
+                      <div><span className="text-gray-500">Catalyst: </span><span className="text-blue-300">{pt.catalyst}</span></div>
+                      <div><span className="text-gray-500">Reliability: </span><span className="text-amber-300">{pt.reliability}</span></div>
+                      <div><span className="text-gray-500">Timeframe: </span><span className="text-gray-300">{pt.timeframe}</span></div>
+                      <div><span className="text-gray-500">Target: </span><span className="text-green-400 font-semibold">{fmtP(pt.target)}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Geometric Patterns */}
+          <div className="glass-effect rounded-xl p-5 space-y-4">
+            <h4 className="font-semibold text-white flex items-center gap-2"><Triangle className="h-4 w-4 text-yellow-400" />Geometric Chart Patterns</h4>
+            {[{label:"Triangles",data:analysis.patterns.triangles},{label:"Channels",data:analysis.patterns.channels},{label:"Flags",data:analysis.patterns.flags}].map(({label,data}) =>
+              data && data.length > 0 && (
+                <div key={label}>
+                  <h5 className="text-xs text-gray-400 uppercase font-semibold mb-2">{label}</h5>
+                  {data.map((pt,i) => (
+                    <div key={i} className="bg-gray-700/30 rounded-lg p-3 mb-2 text-xs">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-white font-medium text-sm">{pt.type}</span>
+                        {pt.probability && <span className="text-green-400 font-semibold">{pt.probability}% prob.</span>}
+                      </div>
+                      {pt.pattern && <div className="text-gray-400 mb-1">{pt.pattern}</div>}
+                      {pt.context && <div className="text-xs text-gray-300 mb-1">{pt.context}</div>}
+                      <div className="flex justify-between text-gray-400 pt-1 border-t border-gray-700/40">
+                        {pt.breakoutTarget && <span className="text-blue-300">Target: {fmtP(pt.breakoutTarget)}</span>}
+                        {pt.target && <span className="text-blue-300">Target: {fmtP(pt.target)}</span>}
+                        {pt.completion && <span className="text-amber-400">Completion: {pt.completion}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
         </div>
       )}
 
@@ -325,45 +491,102 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
         </div>
       )}
 
-      {activeTab==="cycle" && analysis && (
-        <div className="glass-effect rounded-xl p-5 space-y-4">
-          <h4 className="font-semibold text-white flex items-center gap-2"><Clock className="h-4 w-4 text-teal-400" />Cycle Analysis</h4>
-          {[{title:"US Economic Cycles",data:analysis.cycle.us,color:"text-teal-400"},{title:"Seasonal Patterns",data:analysis.cycle.seasonal,color:"text-amber-400"}].map(({title,data,color}) => (
-            <div key={title}>
-              <h5 className={`text-xs ${color} font-semibold uppercase mb-2`}>{title}</h5>
-              {Object.entries(data).map(([k,v]) => (
-                <div key={k} className="flex gap-2 text-xs bg-gray-700/20 rounded px-3 py-2 mb-1"><span className="text-gray-500 w-36 shrink-0">{k}:</span><span className="text-gray-300">{v}</span></div>
-              ))}
+      {activeTab === "cycle" && analysis && (
+        <div className="space-y-4">
+          {/* AI Comprehensive Report Cycle Section */}
+          {analysis.compReport?.cycle && (
+            <div className="bg-gray-800/30 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3 flex items-center">
+                <Clock className="h-4 w-4 mr-2 text-indigo-400" />
+                {analysis.compReport.cycle.heading}
+                <span className="ml-auto text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded">Jenkins/Gann Cycles</span>
+              </h4>
+              <div className="space-y-2">
+                {analysis.compReport.cycle.bullets.map((bullet, i) => (
+                  <div key={i} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                    bullet.startsWith('  ·') ? 'pl-6 text-gray-400 text-xs' : 'bg-indigo-500/5 border border-indigo-500/10 text-gray-200'
+                  }`}>
+                    {!bullet.startsWith('  ·') && <span className="text-indigo-400 mt-0.5 shrink-0">▸</span>}
+                    <span>{bullet}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-          <div className="bg-teal-900/20 border border-teal-700/30 rounded-lg p-4">
-            <h5 className="text-teal-400 font-semibold text-xs uppercase mb-2">Current Cycle Position</h5>
-            <div className="flex gap-4 text-xs">
-              <div><span className="text-gray-500">Phase: </span><span className="text-white">{analysis.cycle.pos.phase}</span></div>
-              <div><span className="text-gray-500">Duration: </span><span className="text-white">{analysis.cycle.pos.dur}</span></div>
-              <div><span className="text-gray-500">Confidence: </span><span className="text-green-400">{analysis.cycle.pos.conf}%</span></div>
-            </div>
+          )}
+
+          {/* Structured US Market Cycles */}
+          <div className="glass-effect rounded-xl p-5 space-y-4">
+            <h4 className="font-semibold text-white flex items-center gap-2"><Clock className="h-4 w-4 text-teal-400" />US Cycle Analysis</h4>
+            
+            {[{title:"US Economic Cycles",data:analysis.cycle.us_cycles,color:"text-teal-400"},{title:"Seasonal Patterns",data:analysis.cycle.seasonal_patterns,color:"text-amber-400"},{title:"Wall Street Market Cycles",data:analysis.cycle.market_cycles,color:"text-cyan-400"},{title:"Trading Session Time Analysis",data:analysis.cycle.time_analysis,color:"text-purple-400"}].map(({title,data,color}) => (
+              data && (
+                <div key={title}>
+                  <h5 className={`text-xs ${color} font-semibold uppercase mb-2`}>{title}</h5>
+                  {Object.entries(data).map(([k,v]) => (
+                    <div key={k} className="flex gap-2 text-xs bg-gray-700/20 rounded px-3 py-2 mb-1">
+                      <span className="text-gray-400 w-44 shrink-0 font-medium capitalize">{k.replace(/_/g, ' ')}:</span>
+                      <span className="text-gray-200">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            ))}
+
+            {analysis.cycle.cycle_position && (
+              <div className="bg-teal-900/20 border border-teal-700/30 rounded-lg p-4">
+                <h5 className="text-teal-400 font-semibold text-xs uppercase mb-2">Current US Cycle Position</h5>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div><span className="text-gray-400 block mb-0.5">Phase</span><span className="text-white font-bold">{analysis.cycle.cycle_position.current_phase}</span></div>
+                  <div><span className="text-gray-400 block mb-0.5">Duration</span><span className="text-white font-bold">{analysis.cycle.cycle_position.phase_duration}</span></div>
+                  <div><span className="text-gray-400 block mb-0.5">Next Phase</span><span className="text-cyan-400 font-bold">{analysis.cycle.cycle_position.next_phase}</span></div>
+                  <div><span className="text-gray-400 block mb-0.5">Confidence</span><span className="text-green-400 font-bold">{analysis.cycle.cycle_position.probability}%</span></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {activeTab==="gann" && analysis && (
-        <div className="glass-effect rounded-xl p-5 space-y-4">
-          <h4 className="font-semibold text-white flex items-center gap-2"><Compass className="h-4 w-4 text-rose-400" />Gann Analysis</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-700/30 rounded-lg p-3 text-center"><div className="text-xs text-gray-400 mb-1">Current Square</div><div className="text-xl font-bold text-rose-400">{analysis.gann.sq.cur}</div></div>
-            <div className="bg-gray-700/30 rounded-lg p-3 text-center"><div className="text-xs text-gray-400 mb-1">Next Square</div><div className="text-xl font-bold text-amber-400">{analysis.gann.sq.next}</div></div>
+      {activeTab === "gann" && analysis && (
+        <div className="space-y-4">
+          {/* AI Comprehensive Report Gann Section */}
+          {analysis.compReport?.gann && (
+            <div className="bg-gray-800/30 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3 flex items-center">
+                <Compass className="h-4 w-4 mr-2 text-amber-400" />
+                {analysis.compReport.gann.heading}
+                <span className="ml-auto text-xs text-amber-400 bg-amber-500/10 px-2 py-1 rounded">Seun Weekly Bot</span>
+              </h4>
+              <div className="space-y-2">
+                {analysis.compReport.gann.bullets.map((bullet, i) => (
+                  <div key={i} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                    bullet.startsWith('  ·') ? 'pl-6 text-gray-400 text-xs' : 'bg-amber-500/5 border border-amber-500/10 text-gray-200'
+                  }`}>
+                    {!bullet.startsWith('  ·') && <span className="text-amber-400 mt-0.5 shrink-0">▸</span>}
+                    <span>{bullet}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="glass-effect rounded-xl p-5 space-y-4">
+            <h4 className="font-semibold text-white flex items-center gap-2"><Compass className="h-4 w-4 text-rose-400" />Gann Analysis</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-700/30 rounded-lg p-3 text-center"><div className="text-xs text-gray-400 mb-1">Current Square</div><div className="text-xl font-bold text-rose-400">{analysis.gann.sq.cur}</div></div>
+              <div className="bg-gray-700/30 rounded-lg p-3 text-center"><div className="text-xs text-gray-400 mb-1">Next Square</div><div className="text-xl font-bold text-amber-400">{analysis.gann.sq.next}</div></div>
+            </div>
+            <div><h5 className="text-xs text-gray-400 uppercase font-semibold mb-2">Gann Angles</h5>
+              {analysis.gann.angles.map((g,i) => (
+                <div key={i} className="flex justify-between text-xs bg-gray-700/20 rounded px-3 py-2 mb-1"><span className="text-gray-400">{g.angle} Angle</span><span className="text-rose-300">{fmtP(g.val)}</span></div>
+              ))}
+            </div>
+            <div><h5 className="text-xs text-gray-400 uppercase font-semibold mb-2">Key Levels</h5>
+              {analysis.gann.res.map((r,i)=><div key={"r"+i} className="flex justify-between text-xs mb-1"><span className="text-red-400">Resistance {i+1}</span><span className="text-white">{fmtP(r)}</span></div>)}
+              {analysis.gann.sup.map((s,i)=><div key={"s"+i} className="flex justify-between text-xs mb-1"><span className="text-green-400">Support {i+1}</span><span className="text-white">{fmtP(s)}</span></div>)}
+            </div>
+            <div className="flex gap-2 flex-wrap">{analysis.gann.tt.map((t,i)=><span key={i} className="bg-rose-500/20 text-rose-300 text-xs px-3 py-1 rounded-full">{t}</span>)}</div>
           </div>
-          <div><h5 className="text-xs text-gray-400 uppercase font-semibold mb-2">Gann Angles</h5>
-            {analysis.gann.angles.map((g,i) => (
-              <div key={i} className="flex justify-between text-xs bg-gray-700/20 rounded px-3 py-2 mb-1"><span className="text-gray-400">{g.angle} Angle</span><span className="text-rose-300">{fmtP(g.val)}</span></div>
-            ))}
-          </div>
-          <div><h5 className="text-xs text-gray-400 uppercase font-semibold mb-2">Key Levels</h5>
-            {analysis.gann.res.map((r,i)=><div key={"r"+i} className="flex justify-between text-xs mb-1"><span className="text-red-400">Resistance {i+1}</span><span className="text-white">{fmtP(r)}</span></div>)}
-            {analysis.gann.sup.map((s,i)=><div key={"s"+i} className="flex justify-between text-xs mb-1"><span className="text-green-400">Support {i+1}</span><span className="text-white">{fmtP(s)}</span></div>)}
-          </div>
-          <div className="flex gap-2 flex-wrap">{analysis.gann.tt.map((t,i)=><span key={i} className="bg-rose-500/20 text-rose-300 text-xs px-3 py-1 rounded-full">{t}</span>)}</div>
         </div>
       )}
 

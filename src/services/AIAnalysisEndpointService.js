@@ -180,13 +180,13 @@ class AIAnalysisEndpointService {
 
   // ── POST /api/Analysis/comprehensive-report/{symbol} ────────────────────────
   // Returns a text report with Patterns, Cycle, Gann sections
-  async fetchComprehensiveReport(nsengSymbol, assetName) {
-    const cacheKey = `comprehensive_${nsengSymbol}`;
+  async fetchComprehensiveReport(symbol, assetName, exchange = 'NGX') {
+    const cacheKey = `comprehensive_${symbol}_${exchange}`;
     const cached = this.getCached(cacheKey);
     if (cached) return cached;
     try {
       const res = await axios.post(
-        `${this.baseUrl}/api/Analysis/comprehensive-report/${encodeURIComponent(nsengSymbol)}?assetName=${encodeURIComponent(assetName || nsengSymbol)}&exchange=NGX`,
+        `${this.baseUrl}/api/Analysis/comprehensive-report/${encodeURIComponent(symbol)}?assetName=${encodeURIComponent(assetName || symbol)}&exchange=${encodeURIComponent(exchange)}`,
         {},
         { timeout: 60000, headers: { 'Content-Type': 'application/json' } }
       );
@@ -201,7 +201,7 @@ class AIAnalysisEndpointService {
       this.setCached(cacheKey, parsed);
       return parsed;
     } catch (err) {
-      console.warn(`ComprehensiveReport unavailable for ${nsengSymbol}:`, err?.message);
+      console.warn(`ComprehensiveReport unavailable for ${symbol}:`, err?.message);
       return null;
     }
   }
