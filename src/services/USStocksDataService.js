@@ -61,12 +61,12 @@ class USStocksDataService {
     try {
       const response = await axios.get(`${this.baseUrl}/api/UsPrediction/data-summary`, { timeout: 30000 });
       const data = response.data || {};
-      data.totalSymbols = Math.Max ? Math.max(data.totalSymbols || 0, 11500) : 11500;
+      data.totalSymbols = data.totalSymbols || 0;
       this.summaryCache = { data, timestamp: now, ttl: this.summaryCache.ttl };
       return data;
     } catch (err) {
       console.warn('data-summary failed:', err?.message);
-      return { totalSymbols: 11500, totalRecords: 575000, symbolsReadyForPrediction: 11500, symbols: [] };
+      return { totalSymbols: 0, totalRecords: 0, symbolsReadyForPrediction: 0, symbols: [] };
     }
   }
 

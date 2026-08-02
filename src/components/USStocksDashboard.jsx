@@ -115,8 +115,8 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
   const [visibleCount, setVisibleCount] = useState(30)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
-  const [totalItems, setTotalItems] = useState(11500)
-  const [totalPages, setTotalPages] = useState(460)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [isPageLoading, setIsPageLoading] = useState(false)
   const [jumpPageInput, setJumpPageInput] = useState('')
 
@@ -146,8 +146,8 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
       }
 
       const meta = res?.metadata || {}
-      const total = meta.totalItems || 11500
-      const pages = meta.totalPages || Math.ceil(total / size)
+      const total = meta.totalItems ?? 0
+      const pages = meta.totalPages || (total > 0 ? Math.ceil(total / size) : 1)
       setTotalItems(total)
       setTotalPages(pages)
       setCurrentPage(page)
