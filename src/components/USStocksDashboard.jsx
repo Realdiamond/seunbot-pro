@@ -113,43 +113,78 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
   }, [])
 
   const [visibleCount, setVisibleCount] = useState(30)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [totalItems, setTotalItems] = useState(11500)
+  const [totalPages, setTotalPages] = useState(460)
+  const [isPageLoading, setIsPageLoading] = useState(false)
+  const [jumpPageInput, setJumpPageInput] = useState('')
 
   useEffect(() => {
     setVisibleCount(30)
   }, [searchTerm, selectedSector, selectedType, viewMode])
 
-  const loadUSData = async () => {
+  const fetchStockPageData = useCallback(async (page = 1, size = pageSize, search = searchTerm, sector = selectedSector) => {
+    setIsPageLoading(true)
     if (globalCachedStocks.length === 0) {
       setLoading(true)
     }
     try {
-      const [stocks, summary] = await Promise.all([
-        USStocksDataService.getAllStocks(),
+      const [res, summary] = await Promise.all([
+        USStocksDataService.fetchStocksPage(page, size, search, sector),
         USStocksDataService.fetchMarketSummary()
       ])
 
-      setAllStocks(stocks)
-      globalCachedStocks = stocks
-      setMarketSummary(summary)
-      globalCachedSummary = summary
+      const rawStocks = res?.stocks || []
+      const mapped = rawStocks.map(s => USStocksDataService.mapStockListItem(s))
+      setAllStocks(mapped)
+      globalCachedStocks = mapped
+
+      if (summary) {
+        setMarketSummary(summary)
+        globalCachedSummary = summary
+      }
+
+      const meta = res?.metadata || {}
+      const total = meta.totalItems || 11500
+      const pages = meta.totalPages || Math.ceil(total / size)
+      setTotalItems(total)
+      setTotalPages(pages)
+      setCurrentPage(page)
       const now = new Date()
       setLastUpdate(now)
       globalLastUpdate = now
 
       // Seed WebSocket cache and connect
-      usStocksWebSocket.seedCache(stocks)
-      const symbols = stocks.map(s => s.symbol)
+      usStocksWebSocket.seedCache(mapped)
+      const symbols = mapped.map(s => s.symbol)
       symbols.forEach(symbol => {
         usStocksWebSocket.subscribe(symbol, handleWsUpdate)
       })
       usStocksWebSocket.onStatusChange(setWsStatus)
       usStocksWebSocket.connect('usstocks', symbols)
     } catch (error) {
-      console.error('❌ Error loading US Stocks data:', error)
+      console.error('❌ Error loading US Stocks paginated data:', error)
     } finally {
+      setIsPageLoading(false)
       setLoading(false)
     }
-  }
+  }, [pageSize, searchTerm, selectedSector, handleWsUpdate])
+
+  const loadUSData = useCallback(() => {
+    fetchStockPageData(currentPage, pageSize, searchTerm, selectedSector)
+  }, [fetchStockPageData, currentPage, pageSize, searchTerm, selectedSector])
+
+  useEffect(() => {
+    fetchStockPageData(1, pageSize, searchTerm, selectedSector)
+  }, [pageSize, selectedSector])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchStockPageData(1, pageSize, searchTerm, selectedSector)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
 
   const getSectorIcon = (sector) => {
     const icons = {
@@ -607,16 +642,107 @@ const USStocksDashboard = ({ onSelectPair, initialSymbol = 'AAPL', viewMode: ini
                         )
                       })}
                     </div>
-                    {list.length > visibleCount && (
-                      <div className="flex items-center justify-center pt-3 mt-2 border-t border-gray-700 bg-gray-800/10">
+
+                    {/* Pagination Controls Bar */}
+                    <div className="mt-4 pt-3 border-t border-gray-700/60 space-y-3">
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400">
+                        <span>
+                          Showing <strong className="text-white">{totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0}</strong>–<strong className="text-white">{Math.min(currentPage * pageSize, totalItems)}</strong> of <strong className="text-white">{totalItems.toLocaleString()}</strong> stocks
+                        </span>
+
+                        <div className="flex items-center space-x-2">
+                          <span>Items:</span>
+                          <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-green-500"
+                          >
+                            <option value={25}>25 / pg</option>
+                            <option value={50}>50 / pg</option>
+                            <option value={100}>100 / pg</option>
+                            <option value={250}>250 / pg</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Navigation buttons */}
+                      <div className="flex items-center justify-between gap-1 text-xs">
+                        <div className="flex items-center space-x-1">
+                          <button
+                            disabled={currentPage <= 1 || isPageLoading}
+                            onClick={() => fetchStockPageData(1)}
+                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 rounded text-gray-300 transition-colors"
+                            title="First Page"
+                          >
+                            «
+                          </button>
+                          <button
+                            disabled={currentPage <= 1 || isPageLoading}
+                            onClick={() => fetchStockPageData(currentPage - 1)}
+                            className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 rounded text-gray-300 transition-colors"
+                          >
+                            Prev
+                          </button>
+                        </div>
+
+                        <span className="text-gray-300 font-medium text-xs">
+                          Page {currentPage} of {totalPages}
+                        </span>
+
+                        <div className="flex items-center space-x-1">
+                          <button
+                            disabled={currentPage >= totalPages || isPageLoading}
+                            onClick={() => fetchStockPageData(currentPage + 1)}
+                            className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 rounded text-gray-300 transition-colors"
+                          >
+                            Next
+                          </button>
+                          <button
+                            disabled={currentPage >= totalPages || isPageLoading}
+                            onClick={() => fetchStockPageData(totalPages)}
+                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 rounded text-gray-300 transition-colors"
+                            title="Last Page"
+                          >
+                            »
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Jump to page */}
+                      <div className="flex items-center justify-center space-x-2 text-xs text-gray-400 pt-1">
+                        <span>Go to page:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={totalPages}
+                          value={jumpPageInput}
+                          onChange={(e) => setJumpPageInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const target = Number(jumpPageInput)
+                              if (target >= 1 && target <= totalPages) {
+                                fetchStockPageData(target)
+                                setJumpPageInput('')
+                              }
+                            }
+                          }}
+                          placeholder={currentPage.toString()}
+                          className="w-16 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white text-center focus:outline-none focus:border-green-500"
+                        />
                         <button
-                          onClick={() => setVisibleCount(c => c + 30)}
-                          className="px-4 py-2 text-xs text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-lg transition-colors"
+                          onClick={() => {
+                            const target = Number(jumpPageInput)
+                            if (target >= 1 && target <= totalPages) {
+                              fetchStockPageData(target)
+                              setJumpPageInput('')
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-green-600 hover:bg-green-500 text-white rounded font-medium transition-colors"
                         >
-                          Show more ({list.length - visibleCount} remaining)
+                          Go
                         </button>
                       </div>
-                    )}
+                    </div>
                   </>
                 )
               })()}

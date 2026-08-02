@@ -39,9 +39,13 @@ class USStocksDataService {
 
   // ─── Endpoint 9: GET /api/UsPrediction/stocks (paginated) ─
   // Primary source for stock list + real-time prices.
-  async fetchStocksPage(page = 1, pageSize = 100) {
+  async fetchStocksPage(page = 1, pageSize = 25, search = '', sector = '') {
+    const params = { page, pageSize };
+    if (search) params.search = search;
+    if (sector && sector !== 'All') params.sector = sector;
+
     const response = await axios.get(`${this.baseUrl}/api/UsPrediction/stocks`, {
-      params: { page, pageSize },
+      params,
       timeout: 30000
     });
     return response.data || {};
