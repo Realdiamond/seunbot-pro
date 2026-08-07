@@ -19,7 +19,8 @@ const AIStockAnalysis = ({ stock, currency = '₦' }) => {
   const loadAnalysis = async () => {
     setLoading(true);
     try {
-      const result = await AIAnalysisEndpointService.analyzeStock(stock);
+      const isUS = currency === '$' || String(stock?.symbol || '').startsWith('US_') || stock?.exchange === 'US';
+      const result = await AIAnalysisEndpointService.analyzeStock(stock, isUS ? 'US' : 'NGX');
       setAnalysis(result);
     } catch (error) {
       console.error('Error loading analysis:', error);

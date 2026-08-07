@@ -311,6 +311,7 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
               </h4>
               <span className="text-xs text-gray-500">{src}</span>
             </div>
+
             <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-blue-400 font-semibold text-sm">Market Structure</span>
@@ -319,11 +320,32 @@ export default function USStocksAdvancedAnalysisPanel({ selectedStock = "AAPL", 
               <div className="text-xs text-gray-400">US Bias: AI Model Alignment</div>
               <div className="text-xs text-blue-300 mt-1">US Factors: SEC / FINRA standard regulatory environment</div>
             </div>
+
+            {/* Hybrid Factor Score Bar if available */}
+            {analysis.ai?.hybridFactorScores && (
+              <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { label: 'Institutional', score: analysis.ai.hybridFactorScores.institutionalScore, weight: analysis.ai.hybridFactorScores.institutionalWeight },
+                  { label: 'Mean Rev.', score: analysis.ai.hybridFactorScores.meanReversionScore, weight: analysis.ai.hybridFactorScores.meanReversionWeight },
+                  { label: 'Momentum', score: analysis.ai.hybridFactorScores.momentumScore, weight: analysis.ai.hybridFactorScores.momentumWeight },
+                  { label: 'Volume', score: analysis.ai.hybridFactorScores.volumeScore, weight: analysis.ai.hybridFactorScores.volumeWeight },
+                ].map(f => (
+                  <div key={f.label} className="bg-gray-700/40 rounded p-2 text-center">
+                    <div className="text-xs text-gray-400 mb-1">{f.label}</div>
+                    <div className={`text-sm font-bold ${f.score > 0 ? 'text-green-400' : f.score < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                      {f.score > 0 ? '+' : ''}{f.score?.toFixed(2) ?? '—'}
+                    </div>
+                    <div className="text-xs text-gray-500">wt {f.weight}%</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-gray-700/30 rounded-lg p-4">
                 <h5 className="text-purple-400 text-xs font-semibold mb-2 uppercase">Liquidity Analysis</h5>
                 <div className="space-y-1 text-xs text-gray-300">
-                  <div><span className="text-gray-500">CBN Impact: </span>Federal Reserve policy impact on liquidity</div>
+                  <div><span className="text-gray-500">Fed Impact: </span>Federal Reserve policy impact on liquidity</div>
                   <div><span className="text-gray-500">Fair Value Gaps: </span>{analysis.smartMoney.fvg}</div>
                   <div><span className="text-gray-500">Order Blocks: </span>{analysis.smartMoney.ob}</div>
                 </div>
