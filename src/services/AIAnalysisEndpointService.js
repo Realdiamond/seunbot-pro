@@ -167,26 +167,44 @@ class AIAnalysisEndpointService {
     }
   }
 
-  // ── GET /api/Prediction/{symbol} ────────────────────────────────────────────
-  async fetchPrediction(bareSymbol) {
+  toMarketSymbol(symbol = '', exchange = 'NGX') {
+    const raw = String(symbol || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('NSENG_') || raw.startsWith('US_') || raw.startsWith('FOREX_')) return raw;
+    const clean = raw.toUpperCase();
+    if (String(exchange).toUpperCase() === 'US') return `US_${clean}`;
+    if (String(exchange).toUpperCase() === 'FOREX') return `FOREX_${clean}`;
+    return `NSENG_${clean}`;
+  }
+
+  // ── GET /api/Prediction/{symbol} or /api/UsPrediction/{symbol} ────────────────
+  async fetchPrediction(bareSymbol, isUS = false) {
+    const primaryUrl = isUS ? `${this.baseUrl}/api/UsPrediction/${encodeURIComponent(bareSymbol)}` : `${this.baseUrl}/api/Prediction/${encodeURIComponent(bareSymbol)}`;
+    const altUrl = isUS ? `${this.baseUrl}/api/Prediction/${encodeURIComponent(bareSymbol)}` : `${this.baseUrl}/api/UsPrediction/${encodeURIComponent(bareSymbol)}`;
     try {
-      const res = await axios.get(`${this.baseUrl}/api/Prediction/${encodeURIComponent(bareSymbol)}`, { timeout: 20000 });
+      const res = await axios.get(primaryUrl, { timeout: 20000 });
       return res.data;
     } catch (err) {
-      console.warn(`Prediction unavailable for ${bareSymbol}:`, err?.message);
-      return null;
+      try {
+        const altRes = await axios.get(altUrl, { timeout: 20000 });
+        return altRes.data;
+      } catch {
+        console.warn(`Prediction unavailable for ${bareSymbol}:`, err?.message);
+        return null;
+      }
     }
   }
 
   // ── POST /api/Analysis/comprehensive-report/{symbol} ────────────────────────
   // Returns a text report with Patterns, Cycle, Gann sections
   async fetchComprehensiveReport(symbol, assetName, exchange = 'NGX') {
-    const cacheKey = `comprehensive_${symbol}_${exchange}`;
+    const cleanSym = String(symbol || '').replace(/^(NSENG_|US_|FOREX_)/i, '').toUpperCase();
+    const cacheKey = `comprehensive_${cleanSym}_${exchange}`;
     const cached = this.getCached(cacheKey);
     if (cached) return cached;
     try {
       const res = await axios.post(
-        `${this.baseUrl}/api/Analysis/comprehensive-report/${encodeURIComponent(symbol)}?assetName=${encodeURIComponent(assetName || symbol)}&exchange=${encodeURIComponent(exchange)}`,
+        `${this.baseUrl}/api/Analysis/comprehensive-report/${encodeURIComponent(cleanSym)}?assetName=${encodeURIComponent(assetName || cleanSym)}&exchange=${encodeURIComponent(exchange)}`,
         {},
         { timeout: 60000, headers: { 'Content-Type': 'application/json' } }
       );
@@ -227,18 +245,22 @@ class AIAnalysisEndpointService {
 
   // ── Main: fires all 3 in parallel ──────────────────────────────────────────
 
-  async analyzeStock(stock) {
-    const normalized = this.normalizeSymbol(stock?.rawSymbol || stock?.symbol || '');
+  async analyzeStock(stock, exchange = 'NGX') {
+    const rawSym = typeof stock === 'string' ? stock : (stock?.rawSymbol || stock?.symbol || '');
+    const normalized = this.normalizeSymbol(rawSym);
     if (!normalized) throw new Error('Stock symbol is required for AI analysis.');
 
-    const nseng = this.toNsengSymbol(normalized);
-    const cached = this.getCached(nseng);
+    const isUS = String(exchange).toUpperCase() === 'US' || String(rawSym).startsWith('US_') || stock?.exchange === 'US';
+    const marketSymbol = this.toMarketSymbol(normalized, isUS ? 'US' : exchange);
+    const cacheKey = `analysis_${marketSymbol}`;
+
+    const cached = this.getCached(cacheKey);
     if (cached) return cached;
 
     const [hybrid, grok, pred] = await Promise.all([
-      this.fetchHybridAnalysis(nseng),       // requires NSENG_ prefix
-      this.fetchGrokSentiment(normalized),    // bare symbol
-      this.fetchPrediction(normalized)         // bare symbol
+      this.fetchHybridAnalysis(marketSymbol),
+      this.fetchGrokSentiment(normalized),
+      this.fetchPrediction(normalized, isUS)
     ]);
 
     if (!hybrid && !pred && !grok) throw new Error('All AI analysis endpoints are currently unavailable.');
