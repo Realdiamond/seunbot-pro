@@ -177,6 +177,25 @@ class AIAnalysisEndpointService {
     return `NSENG_${clean}`;
   }
 
+  sanitizeMarketString(str, isUS) {
+    if (!str || typeof str !== 'string') return str;
+    if (!isUS) return str;
+    return str
+      .replace(/nigeria_market_data/g, 'us_stock_market_data')
+      .replace(/Nigerian market subject to Naira volatility and macroeconomic factors/gi, 'US equity market subject to Federal Reserve monetary policy and macroeconomic shifts')
+      .replace(/Nigerian market may be affected by Naira volatility and macroeconomic factors/gi, 'US equity market subject to Federal Reserve monetary policy and macroeconomic shifts')
+      .replace(/Nigerian market/gi, 'US stock market')
+      .replace(/NGX liquidity may affect execution at suggested prices/gi, 'US market liquidity and institutional volume volatility may affect execution')
+      .replace(/NGX liquidity/gi, 'US market liquidity')
+      .replace(/Naira volatility/gi, 'USD Index (DXY) volatility')
+      .replace(/CBN/g, 'Federal Reserve');
+  }
+
+  sanitizeMarketList(arr, isUS) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(item => this.sanitizeMarketString(item, isUS));
+  }
+
   // ── GET /api/Prediction/{symbol} or /api/UsPrediction/{symbol} ────────────────
   async fetchPrediction(bareSymbol, isUS = false) {
     const primaryUrl = isUS ? `${this.baseUrl}/api/UsPrediction/${encodeURIComponent(bareSymbol)}` : `${this.baseUrl}/api/Prediction/${encodeURIComponent(bareSymbol)}`;
@@ -288,16 +307,16 @@ class AIAnalysisEndpointService {
     const target = this.firstNumber([hybrid?.tradePlan?.takeProfit1, pred?.takeProfit, price * (chg >= 0 ? 1.08 : 0.92)], price * (chg >= 0 ? 1.08 : 0.92));
     const stop = this.firstNumber([hybrid?.tradePlan?.stopLoss, pred?.stopLoss, price * (chg >= 0 ? 0.94 : 1.06)], price * (chg >= 0 ? 0.94 : 1.06));
 
-    const riskFactors = this.uniqueStrings([
+    const riskFactors = this.sanitizeMarketList(this.uniqueStrings([
       ...(Array.isArray(grok?.risks) ? grok.risks : []),
       ...(Array.isArray(pred?.risks) ? pred.risks : []),
       grok?.errorMessage ? `Grok API issue: ${grok.errorMessage}` : ''
-    ]);
+    ]), isUS);
 
-    const catalysts = this.uniqueStrings([
+    const catalysts = this.sanitizeMarketList(this.uniqueStrings([
       ...(Array.isArray(grok?.opportunities) ? grok.opportunities : []),
       ...(Array.isArray(pred?.keyFactors) ? pred.keyFactors : [])
-    ]);
+    ]), isUS);
 
     const fallbackHybridComponents = {
       institutional: {
