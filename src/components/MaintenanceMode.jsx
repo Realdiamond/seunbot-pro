@@ -39,7 +39,7 @@ function MaintenanceMode() {
 
         {/* Footer */}
         <p className="text-gray-500 text-xs mt-6">
-          © 2024 SeunBot Pro. All rights reserved.
+          © 2026 SeunBot Pro. All rights reserved.
         </p>
       </div>
     </div>
