@@ -7,6 +7,7 @@ import {
 import NGXDashboard from './components/NGXDashboard'
 import NGXAdvancedAnalysis from './components/NGXAdvancedAnalysis'
 import NGXWeeklySetupsPanel from './components/NGXWeeklySetupsPanel'
+import MaintenanceMode from './components/MaintenanceMode'
 import './App.css'
 
 const CryptoDashboard  = lazy(() => import('./components/crypto/CryptoDashboard'))
@@ -102,6 +103,14 @@ function USStocksSymbolAnalysis() {
 }
 
 function App() {
+  // Check if maintenance mode is enabled
+  const maintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true'
+
+  // If maintenance mode is on, show maintenance page
+  if (maintenanceMode) {
+    return <MaintenanceMode />
+  }
+
   const navigate = useNavigate()
   const enabledMarkets = useMemo(() => {
     const raw = import.meta.env.VITE_ENABLED_MARKETS || 'ngx'
@@ -179,7 +188,7 @@ function App() {
         </div>
 
         {/* Sidebar */}
-        <div className={`fixed inset-y-0 left-0 z-40 w-[82vw] max-w-xs sm:w-72 lg:w-64 bg-gray-900/95 backdrop-blur-sm border-r border-gray-700 transform transition-transform duration-300 ease-in-out ${
+        <div className={`fixed inset-y-0 left-0 z-40 w-[82vw] max-w-xs sm:w-72 lg:w-64 bg-gray-900/95 backdrop-blur-sm border-r border-gray-700 transform transition-transform duration-300 ease-in[...]
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}>
           <div className="flex flex-col h-full">
